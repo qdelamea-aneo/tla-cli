@@ -17,7 +17,7 @@ from typing import Optional, Any, Union
 
 from rich.console import Console
 
-from ..packages import GithubReleasePackage
+from ..packages import Package
 from .java import JavaClassTool
 from .tlc_output import (
     TLCActionCoverage,
@@ -129,8 +129,8 @@ class TLC(JavaClassTool):
         self,
         main_class: str,
         data_path: Path,
-        community_modules: GithubReleasePackage,
-        pkg: GithubReleasePackage,
+        community_modules: Package,
+        pkg: Package,
         logger: Logger,
         console: Console,
     ) -> None:

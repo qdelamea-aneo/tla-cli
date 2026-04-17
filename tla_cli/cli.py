@@ -6,14 +6,13 @@ from rich.panel import Panel
 from rich.text import Text
 
 from .commands import (
-    tla_package,
     tla_model_check,
     tla_simulate,
     tla_parse,
     tla_proof_check,
     tla_run,
 )
-from .constants import CONSOLE, WORKDIR, TOOLS_DIR, repl
+from .constants import CONSOLE, WORKDIR, repl
 from .utils import AliasedGroup, error_handler
 
 
@@ -72,7 +71,6 @@ def cli(ctx: click.Context) -> None:
     Command-line tool to simplify working with TLA+.
     """
     WORKDIR.mkdir(exist_ok=True)
-    TOOLS_DIR.mkdir(exist_ok=True)
 
     if ctx.invoked_subcommand is None:
         if repl.is_available():
@@ -82,7 +80,6 @@ def cli(ctx: click.Context) -> None:
             click.echo(ctx.get_help())
 
 
-cli.add_command(tla_package)
 cli.add_command(tla_model_check)
 cli.add_command(tla_simulate)
 cli.add_command(tla_parse)

@@ -7,7 +7,7 @@ from typing import cast
 from rich.console import Console
 from packaging.version import Version
 
-from ..packages import GithubReleasePackage
+from ..packages import Package
 from .java import JavaClassTool
 
 
@@ -17,7 +17,7 @@ class REPL(JavaClassTool):
     def __init__(
         self,
         main_class: str,
-        pkg: GithubReleasePackage,
+        pkg: Package,
         logger: Logger,
         console: Console,
     ) -> None:
@@ -33,9 +33,10 @@ class REPL(JavaClassTool):
     def is_available(self) -> bool:
         if not super().is_available():
             return False
-        elif cast(Version, self.pkg.current_version) >= Version("v1.8.0"):
+        version = self.pkg.current_version
+        if version is None:
             return True
-        return False
+        return cast(Version, version) >= Version("v1.8.0")
 
     def start(self) -> None:
         """Starts the REPL if the version of TLA2Tools supports it."""

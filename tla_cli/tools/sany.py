@@ -25,7 +25,7 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
-from ..packages import GithubReleasePackage
+from ..packages import Package
 from .java import JavaClassTool
 
 
@@ -321,8 +321,8 @@ class SANY(JavaClassTool):
 
     def __init__(
         self,
-        community_modules: GithubReleasePackage,
-        pkg: GithubReleasePackage,
+        community_modules: Package,
+        pkg: Package,
         logger: Logger,
         console: Console,
         data_path: Optional[Path] = None,

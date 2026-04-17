@@ -1,11 +1,12 @@
 import logging
+import os
 
 from pathlib import Path
 
 from rich.console import Console
 from rich.logging import RichHandler
 
-from .packages import TLA2Tools, CommunityModules, LocalBinaryPackage
+from .packages import LocalBinaryPackage
 from .tools import TLC, REPL, SANY, TLAPM
 
 
@@ -13,9 +14,8 @@ VALID = "[green]✓[/green]"
 CROSS = "[red]✗[/red]"
 UNCHANGED = "[yellow]~[/yellow]"
 
-PROJECT_DIR = Path(__file__).parent.parent
-WORKDIR = PROJECT_DIR / ".tla"
-TOOLS_DIR = WORKDIR / "tools"
+BUNDLED_TOOLS_DIR = Path(__file__).parent / "data" / "tools"
+WORKDIR = Path.cwd() / ".tla"
 RUN_DATA_DIR = WORKDIR / "data"
 
 CONSOLE = Console()
@@ -29,8 +29,18 @@ logging.basicConfig(
 LOGGER = logging.getLogger("rich")
 
 
-tla2tools = TLA2Tools(location=TOOLS_DIR, logger=LOGGER, console=CONSOLE)
-community_modules = CommunityModules(location=TOOLS_DIR, logger=LOGGER, console=CONSOLE)
+tla2tools = LocalBinaryPackage(
+    name="TLA2Tools",
+    location=BUNDLED_TOOLS_DIR / "tla2tools.jar",
+    logger=LOGGER,
+    console=CONSOLE,
+)
+community_modules = LocalBinaryPackage(
+    name="CommunityModules",
+    location=BUNDLED_TOOLS_DIR / "CommunityModules-deps.jar",
+    logger=LOGGER,
+    console=CONSOLE,
+)
 
 repl = REPL(main_class="tlc2.REPL", pkg=tla2tools, logger=LOGGER, console=CONSOLE)
 
@@ -51,7 +61,9 @@ sany = SANY(
     data_path=RUN_DATA_DIR,
 )
 
-_tlapm_binary = TOOLS_DIR / "tlapm" / "bin" / "tlapm"
+_tlapm_binary = BUNDLED_TOOLS_DIR / "tlapm" / "bin" / (
+    "tlapm.exe" if os.name == "nt" else "tlapm"
+)
 _tlapm_pkg = LocalBinaryPackage(
     name="tlapm",
     location=_tlapm_binary,
@@ -60,7 +72,7 @@ _tlapm_pkg = LocalBinaryPackage(
 )
 tlapm = TLAPM(
     pkg=_tlapm_pkg,
-    community_modules_dir=TOOLS_DIR / "CommunityModules-deps",
+    community_modules_dir=BUNDLED_TOOLS_DIR / "CommunityModules-deps",
     logger=LOGGER,
     console=CONSOLE,
     data_path=RUN_DATA_DIR,
