@@ -68,6 +68,16 @@ def _common_tlc_options(func):
         default=None,
         help="Kill TLC after SECONDS seconds.",
     )(func)
+    func = click.option(
+        "--no-progress",
+        "no_progress",
+        is_flag=True,
+        default=False,
+        help=(
+            "Disable the interactive live display.  Each progress update is "
+            "printed as a plain line instead, which is friendlier for CI logs."
+        ),
+    )(func)
     return func
 
 
@@ -154,6 +164,7 @@ def tla_model_check(
     checkpoint_interval: Optional[int],
     coverage: Optional[int],
     timeout: Optional[int],
+    no_progress: bool,
     explain: bool,
     llm_backend: str,
     output_format: str,
@@ -173,6 +184,7 @@ def tla_model_check(
     if checkpoint_interval is not None and checkpoint_dir is None:
         raise click.UsageError("--checkpoint-interval requires --checkpoint-dir.")
 
+    use_json = output_format == "json"
     model_path = model_path or module_path.with_suffix(".cfg")
     run = tlc.start(
         module_path,
@@ -187,9 +199,11 @@ def tla_model_check(
         checkpoint_interval=checkpoint_interval,
         coverage_interval=coverage,
         timeout=timedelta(seconds=timeout) if timeout is not None else None,
+        interactive=not (no_progress or use_json),
+        silent=use_json,
     )
 
-    if output_format == "json":
+    if use_json:
         json.dump(run.to_dict(), sys.stdout, indent=2, default=str)
         sys.stdout.write("\n")
         return
@@ -266,6 +280,7 @@ def tla_simulate(
     seed: Optional[int],
     num_traces: Optional[int],
     timeout: Optional[int],
+    no_progress: bool,
     explain: bool,
     llm_backend: str,
     output_format: str,
@@ -283,6 +298,7 @@ def tla_simulate(
                 f"External module '{ext_module}' must be a .jar file."
             )
 
+    use_json = output_format == "json"
     model_path = model_path or module_path.with_suffix(".cfg")
     run = tlc.simulate(
         module_path,
@@ -295,9 +311,11 @@ def tla_simulate(
         seed=seed,
         num_traces=num_traces,
         timeout=timedelta(seconds=timeout) if timeout is not None else None,
+        interactive=not (no_progress or use_json),
+        silent=use_json,
     )
 
-    if output_format == "json":
+    if use_json:
         json.dump(run.to_dict(), sys.stdout, indent=2, default=str)
         sys.stdout.write("\n")
         return

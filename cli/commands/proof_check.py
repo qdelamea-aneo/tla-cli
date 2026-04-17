@@ -1,5 +1,8 @@
 """TLAPS proof-check command."""
 
+import json
+import sys
+
 from datetime import timedelta
 from pathlib import Path
 from typing import Optional
@@ -48,6 +51,16 @@ from ..utils import error_handler
     help="Kill tlapm after SECONDS seconds.",
 )
 @click.option(
+    "--no-progress",
+    "no_progress",
+    is_flag=True,
+    default=False,
+    help=(
+        "Disable the interactive live display.  Each progress update is "
+        "printed as a plain line instead."
+    ),
+)
+@click.option(
     "--explain",
     is_flag=True,
     default=False,
@@ -63,6 +76,13 @@ from ..utils import error_handler
     show_default=True,
     help="LLM backend to use with --explain.",
 )
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: 'text' for the default Rich display, 'json' for machine-readable output.",
+)
 @error_handler
 def tla_proof_check(
     module_path: Path,
@@ -70,8 +90,10 @@ def tla_proof_check(
     community_modules: bool,
     external_module: tuple[Path, ...],
     timeout: Optional[int],
+    no_progress: bool,
     explain: bool,
     llm_backend: str,
+    output_format: str,
 ) -> None:
     """
     Check TLA+ proofs with TLAPS (tlapm).
@@ -95,6 +117,7 @@ def tla_proof_check(
     # the user passes an individual .tla file.
     include_dirs = [p if p.is_dir() else p.parent for p in external_module]
 
+    use_json = output_format == "json"
     timeout_td = timedelta(seconds=timeout) if timeout is not None else None
     run = tlapm.prove(
         module_path,
@@ -102,7 +125,16 @@ def tla_proof_check(
         community_modules=community_modules,
         include_dirs=include_dirs,
         timeout=timeout_td,
+        interactive=not (no_progress or use_json),
+        silent=use_json,
     )
+
+    if use_json:
+        json.dump(run.to_dict(), sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        if not run.success:
+            raise SystemExit(1)
+        return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..tools.llm import explain_tlapm_error

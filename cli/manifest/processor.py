@@ -94,6 +94,8 @@ class Manifest(BaseModel):
         workers_override: Optional[int] = None,
         max_heap_override: Optional[str] = None,
         skip_passed: bool = False,
+        interactive: bool = True,
+        silent: bool = False,
     ) -> list[ActionResult]:
         """Process all modules defined in the manifest.
 
@@ -124,8 +126,9 @@ class Manifest(BaseModel):
 
         results: list[ActionResult] = []
 
-        CONSOLE.print()
-        CONSOLE.rule("[bold]Manifest processing[/bold]")
+        if not silent:
+            CONSOLE.print()
+            CONSOLE.rule("[bold]Manifest processing[/bold]")
 
         for module in self.modules:
             if not (module.models or module.proofs):
@@ -142,8 +145,9 @@ class Manifest(BaseModel):
                 if not module_allowed:
                     continue
 
-            CONSOLE.print()
-            CONSOLE.print(f"[bold cyan]Module:[/bold cyan] {module.path.name}")
+            if not silent:
+                CONSOLE.print()
+                CONSOLE.print(f"[bold cyan]Module:[/bold cyan] {module.path.name}")
 
             for model in module.models:
                 if filters:
@@ -152,12 +156,14 @@ class Manifest(BaseModel):
                         continue
                 cache_key = f"{module_stem}/{model.name}"
                 if skip_passed and cache.get(cache_key):
-                    CONSOLE.print(
-                        f"  [dim]▸ Model:[/dim] {model.name} [dim](skipped — passed previously)[/dim]"
-                    )
+                    if not silent:
+                        CONSOLE.print(
+                            f"  [dim]▸ Model:[/dim] {model.name} [dim](skipped — passed previously)[/dim]"
+                        )
                     continue
                 result = self._run_model(
-                    module, model, workers_override, max_heap_override
+                    module, model, workers_override, max_heap_override,
+                    interactive=interactive, silent=silent,
                 )
                 results.append(result)
                 if skip_passed:
@@ -170,11 +176,12 @@ class Manifest(BaseModel):
                         continue
                 cache_key = f"{module_stem}/{proof.name}"
                 if skip_passed and cache.get(cache_key):
-                    CONSOLE.print(
-                        f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]"
-                    )
+                    if not silent:
+                        CONSOLE.print(
+                            f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]"
+                        )
                     continue
-                result = self._run_proof(module, proof)
+                result = self._run_proof(module, proof, interactive=interactive, silent=silent)
                 results.append(result)
                 if skip_passed:
                     cache[cache_key] = result.overall_ok
@@ -185,7 +192,8 @@ class Manifest(BaseModel):
             except OSError:
                 pass
 
-        self._print_summary(results)
+        if not silent:
+            self._print_summary(results)
         return results
 
     # ------------------------------------------------------------------
@@ -198,8 +206,11 @@ class Manifest(BaseModel):
         model: Model,
         workers_override: Optional[int] = None,
         max_heap_override: Optional[str] = None,
+        interactive: bool = True,
+        silent: bool = False,
     ) -> ActionResult:
-        CONSOLE.print(f"  [dim]▸ Model:[/dim] {model.name}")
+        if not silent:
+            CONSOLE.print(f"  [dim]▸ Model:[/dim] {model.name}")
 
         if workers_override is not None:
             workers_arg: Union[int, str] = workers_override
@@ -218,9 +229,12 @@ class Manifest(BaseModel):
                 max_heap_size=heap,
                 community_modules=module.dependencies.community_modules,
                 external_modules=module.dependencies.external_modules,
+                interactive=interactive,
+                silent=silent,
             )
         except Exception as exc:
-            CONSOLE.print(f"    [red]Error running TLC: {exc}[/red]")
+            if not silent:
+                CONSOLE.print(f"    [red]Error running TLC: {exc}[/red]")
             return ActionResult(
                 action_type="model",
                 name=model.name,
@@ -231,7 +245,7 @@ class Manifest(BaseModel):
             )
 
         checks_passed, detail = self._verify_model_checks(tlc_run, model.checks)
-        if not checks_passed:
+        if not checks_passed and not silent:
             CONSOLE.print(f"    [yellow]Check mismatch: {detail}[/yellow]")
 
         return ActionResult(
@@ -293,13 +307,21 @@ class Manifest(BaseModel):
     # Internal: proof check
     # ------------------------------------------------------------------
 
-    def _run_proof(self, module: Module, proof: Proof) -> ActionResult:
-        CONSOLE.print(f"  [dim]▸ Proof:[/dim] {proof.name}")
+    def _run_proof(
+        self,
+        module: Module,
+        proof: Proof,
+        interactive: bool = True,
+        silent: bool = False,
+    ) -> ActionResult:
+        if not silent:
+            CONSOLE.print(f"  [dim]▸ Proof:[/dim] {proof.name}")
 
         if not tlapm.is_available():
-            CONSOLE.print(
-                "    [yellow]tlapm is not installed — skipping proof.[/yellow]"
-            )
+            if not silent:
+                CONSOLE.print(
+                    "    [yellow]tlapm is not installed — skipping proof.[/yellow]"
+                )
             return ActionResult(
                 action_type="proof",
                 name=proof.name,
@@ -320,9 +342,12 @@ class Manifest(BaseModel):
                 community_modules=module.dependencies.community_modules,
                 include_dirs=include_dirs,
                 timeout=proof.timeout,
+                interactive=interactive,
+                silent=silent,
             )
         except Exception as exc:
-            CONSOLE.print(f"    [red]Error running tlapm: {exc}[/red]")
+            if not silent:
+                CONSOLE.print(f"    [red]Error running tlapm: {exc}[/red]")
             return ActionResult(
                 action_type="proof",
                 name=proof.name,
@@ -333,7 +358,7 @@ class Manifest(BaseModel):
             )
 
         checks_passed, detail = self._verify_proof_checks(tlapm_run, proof.checks)
-        if not checks_passed:
+        if not checks_passed and not silent:
             CONSOLE.print(f"    [yellow]Check mismatch: {detail}[/yellow]")
 
         return ActionResult(

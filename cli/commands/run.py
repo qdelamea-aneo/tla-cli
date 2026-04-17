@@ -1,5 +1,8 @@
 """Manifest run command."""
 
+import json
+import sys
+
 from pathlib import Path
 from typing import Optional
 
@@ -50,6 +53,26 @@ from ..utils import error_handler
         "cached in .tla-run-cache.json next to the manifest file."
     ),
 )
+@click.option(
+    "--no-progress",
+    "no_progress",
+    is_flag=True,
+    default=False,
+    help=(
+        "Disable the interactive live displays inside each tool run.  "
+        "Progress updates are printed as plain lines instead."
+    ),
+)
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help=(
+        "Output format.  'json' emits a JSON array of action results to stdout "
+        "and suppresses all Rich panels."
+    ),
+)
 @error_handler
 def tla_run(
     manifest_path: Path,
@@ -57,6 +80,8 @@ def tla_run(
     workers: Optional[int],
     max_heap_size: Optional[str],
     skip_passed: bool,
+    no_progress: bool,
+    output_format: str,
 ) -> None:
     """
     Process all modules defined in a manifest file.
@@ -67,11 +92,24 @@ def tla_run(
     """
     from ..manifest import Manifest
 
+    use_json = output_format == "json"
     results = Manifest.load_manifest(manifest_path).process(
         filters=list(filters) if filters else None,
         workers_override=workers,
         max_heap_override=max_heap_size,
         skip_passed=skip_passed,
+        interactive=not (no_progress or use_json),
+        silent=use_json,
     )
+
+    if use_json:
+        json.dump(
+            [r.model_dump() for r in results],
+            sys.stdout,
+            indent=2,
+            default=str,
+        )
+        sys.stdout.write("\n")
+
     if any(not r.overall_ok for r in results):
         raise SystemExit(1)
