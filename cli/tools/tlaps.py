@@ -22,7 +22,7 @@ import re
 import subprocess
 import threading
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from logging import Logger
 from pathlib import Path
@@ -117,6 +117,10 @@ class TLAPMRun:
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     log_file: Optional[Path] = None
+
+    def to_dict(self) -> dict:
+        """Convert this instance to a JSON-serialisable dictionary."""
+        return asdict(self)
 
     @property
     def num_proved(self) -> int:
@@ -305,32 +309,43 @@ class TLAPMOutputDisplay:
     :meth:`show_summary` once after the run completes.
     """
 
-    def __init__(self, console: Console, module_name: str) -> None:
+    def __init__(
+        self,
+        console: Console,
+        module_name: str,
+        *,
+        interactive: bool = True,
+        silent: bool = False,
+    ) -> None:
         self._console = console
         self._module_name = module_name
+        self._interactive = interactive
+        self._silent = silent
         self._progress: Optional[Progress] = None
         self._live: Optional[Live] = None
         self._task_id = None
+        self._last_proved: int = -1  # plain-mode state
 
     def __enter__(self) -> "TLAPMOutputDisplay":
-        self._progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-            console=self._console,
-            transient=False,
-        )
-        self._task_id = self._progress.add_task(
-            f"Proving {self._module_name}…", total=None
-        )
-        self._live = Live(
-            self._progress,
-            console=self._console,
-            refresh_per_second=10,
-        )
-        self._live.__enter__()
+        if not self._silent and self._interactive:
+            self._progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeElapsedColumn(),
+                console=self._console,
+                transient=False,
+            )
+            self._task_id = self._progress.add_task(
+                f"Proving {self._module_name}…", total=None
+            )
+            self._live = Live(
+                self._progress,
+                console=self._console,
+                refresh_per_second=10,
+            )
+            self._live.__enter__()
         return self
 
     def __exit__(self, *args) -> None:
@@ -340,7 +355,7 @@ class TLAPMOutputDisplay:
 
     def update(self, parser: TLAPMOutputParser) -> None:
         """Refresh the display from *parser* state."""
-        if self._progress is None or self._task_id is None:
+        if self._silent:
             return
 
         obligations = parser.get_obligations()
@@ -354,20 +369,36 @@ class TLAPMOutputDisplay:
             1 for o in obligations.values() if o.status not in _FINAL_STATUSES
         )
 
-        parts: list[str] = [f"Proving {self._module_name}"]
-        parts.append(f"  {proved}/{total} proved")
-        if failed:
-            parts.append(f"[red]{failed} failed[/red]")
-        if pending:
-            parts.append(f"{pending} in progress")
-
-        description = " · ".join(parts)
-        self._progress.update(
-            self._task_id, description=description, total=total, completed=proved
-        )
+        if self._interactive:
+            if self._progress is None or self._task_id is None:
+                return
+            parts: list[str] = [f"Proving {self._module_name}"]
+            parts.append(f"  {proved}/{total} proved")
+            if failed:
+                parts.append(f"[red]{failed} failed[/red]")
+            if pending:
+                parts.append(f"{pending} in progress")
+            description = " · ".join(parts)
+            self._progress.update(
+                self._task_id, description=description, total=total, completed=proved
+            )
+        else:
+            # Plain mode: print a line each time a new obligation is proved.
+            if proved > self._last_proved:
+                self._last_proved = proved
+                failed_part = f", {failed} failed" if failed else ""
+                self._console.print(
+                    f"[dim]{self._module_name}[/dim] · "
+                    f"{proved}/{total} proved{failed_part}"
+                )
 
     def show_summary(self, run: TLAPMRun) -> None:
-        """Print the final summary panel after the live display has closed."""
+        """Print the final summary panel after the live display has closed.
+
+        No-op when the display is in silent mode.
+        """
+        if self._silent:
+            return
         proved = run.num_proved
         failed = run.num_failed
         total = run.num_obligations or len(run.obligations)
@@ -445,6 +476,8 @@ class TLAPM(Tool):
         community_modules: bool = False,
         include_dirs: Optional[list[Path]] = None,
         timeout: Optional[timedelta] = None,
+        interactive: bool = True,
+        silent: bool = False,
     ) -> TLAPMRun:
         """Run tlapm on *module_path* and return the results.
 
@@ -475,7 +508,9 @@ class TLAPM(Tool):
 
         output_lines: list[str] = []
         parser = TLAPMOutputParser()
-        display = TLAPMOutputDisplay(self.console, module_path.stem)
+        display = TLAPMOutputDisplay(
+            self.console, module_path.stem, interactive=interactive, silent=silent
+        )
 
         process = subprocess.Popen(
             cmd,

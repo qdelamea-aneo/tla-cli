@@ -883,26 +883,44 @@ class TLCOutputDisplay:
         console: Rich :class:`~rich.console.Console` used for all output.
         module_name: Short name of the TLA+ module being checked, shown in the
             panel title.
+        interactive: When ``True`` (default) use a Rich Live display.  When
+            ``False`` each significant progress change is printed as a new line
+            instead (suitable for non-TTY environments or ``--no-progress``).
+        silent: When ``True`` suppress all output, including the summary panel.
+            Use this when the caller will emit structured output (e.g. JSON).
     """
 
-    def __init__(self, console: Console, module_name: str) -> None:
+    def __init__(
+        self,
+        console: Console,
+        module_name: str,
+        *,
+        interactive: bool = True,
+        silent: bool = False,
+    ) -> None:
         self._console = console
         self._module_name = module_name
+        self._interactive = interactive
+        self._silent = silent
         self._live: Optional[Live] = None
+        # Plain-mode state tracking
+        self._last_phase: Optional[TLCPhase] = None
+        self._last_depth: Optional[int] = None
 
     # ------------------------------------------------------------------
     # Context-manager protocol
     # ------------------------------------------------------------------
 
     def __enter__(self) -> "TLCOutputDisplay":
-        """Start the Rich Live display."""
-        self._live = Live(
-            self._render(TLCPhase.INIT, None),
-            console=self._console,
-            refresh_per_second=10,
-            transient=True,
-        )
-        self._live.__enter__()
+        """Start the Rich Live display (no-op in silent or plain mode)."""
+        if not self._silent and self._interactive:
+            self._live = Live(
+                self._render(TLCPhase.INIT, None),
+                console=self._console,
+                refresh_per_second=10,
+                transient=True,
+            )
+            self._live.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -916,17 +934,38 @@ class TLCOutputDisplay:
     # ------------------------------------------------------------------
 
     def update(self, parser: TLCOutputParser) -> None:
-        """Refresh the live display based on the latest parser state.
+        """Refresh the display based on the latest parser state.
+
+        In interactive mode updates the Live renderable in-place.  In plain
+        mode prints a new line whenever the phase or depth changes.  In silent
+        mode is a no-op.
 
         Args:
             parser: The :class:`TLCOutputParser` whose current state should be
                 reflected in the display.
         """
-        if self._live is None:
+        if self._silent:
             return
         phase = parser.get_current_phase()
         progress = parser.get_latest_progress()
-        self._live.update(self._render(phase, progress))
+        if self._interactive:
+            if self._live is not None:
+                self._live.update(self._render(phase, progress))
+        else:
+            if phase != self._last_phase:
+                self._last_phase = phase
+                label = _PHASE_LABELS.get(phase, phase.value)
+                self._console.print(
+                    f"[dim]{self._module_name}[/dim] · {label}"
+                )
+            elif progress is not None and progress.depth != self._last_depth:
+                self._last_depth = progress.depth
+                self._console.print(
+                    f"[dim]{self._module_name}[/dim] · "
+                    f"depth {progress.depth}, "
+                    f"{progress.total_states:,} states, "
+                    f"{progress.distinct_states:,} distinct"
+                )
 
     # ------------------------------------------------------------------
     # Summary panel
@@ -934,6 +973,9 @@ class TLCOutputDisplay:
 
     def show_summary(self, tlc_run: "TLCRun", run_dir: Optional[Path] = None) -> None:
         """Print a static Rich panel summarising the completed TLC run.
+
+        No-op when the display is in silent mode.
+
 
         The panel content adapts to the error kind:
 
@@ -953,6 +995,8 @@ class TLCOutputDisplay:
             run_dir: Directory where the run artefacts (log, JSON) were saved.
                 When provided, the path to ``tlc.log`` is shown at the bottom.
         """
+        if self._silent:
+            return
         success = tlc_run.success
         title_color = "green" if success else "red"
         status_icon = "[green]✓[/green]" if success else "[red]✗[/red]"

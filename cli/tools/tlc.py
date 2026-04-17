@@ -188,6 +188,8 @@ class TLC(JavaClassTool):
         coverage_interval: Optional[int] = None,
         timeout: Optional[timedelta] = None,
         show_log: bool = False,
+        interactive: bool = True,
+        silent: bool = False,
     ) -> TLCRun:
         """Run TLC in exhaustive model-checking mode and return the results.
 
@@ -248,7 +250,8 @@ class TLC(JavaClassTool):
         )
 
         tlc_output, process, display = self._run_process(
-            cmd, run_dir, module_path.stem, tlc_run, show_log, timeout=timeout
+            cmd, run_dir, module_path.stem, tlc_run, show_log,
+            timeout=timeout, interactive=interactive, silent=silent,
         )
 
         if process.returncode == 0:
@@ -274,6 +277,8 @@ class TLC(JavaClassTool):
         num_traces: Optional[int] = None,
         timeout: Optional[timedelta] = None,
         show_log: bool = False,
+        interactive: bool = True,
+        silent: bool = False,
     ) -> TLCRun:
         """Run TLC in simulation mode and return the results.
 
@@ -319,7 +324,8 @@ class TLC(JavaClassTool):
         )
 
         tlc_output, process, display = self._run_process(
-            cmd, run_dir, module_path.stem, tlc_run, show_log, timeout=timeout
+            cmd, run_dir, module_path.stem, tlc_run, show_log,
+            timeout=timeout, interactive=interactive, silent=silent,
         )
 
         if process.returncode == 0:
@@ -343,6 +349,8 @@ class TLC(JavaClassTool):
         tlc_run: TLCRun,
         show_log: bool,
         timeout: Optional[timedelta] = None,
+        interactive: bool = True,
+        silent: bool = False,
     ) -> tuple[str, subprocess.Popen, TLCOutputDisplay]:
         """Launch the TLC subprocess, stream output through the display, and wait.
 
@@ -370,7 +378,9 @@ class TLC(JavaClassTool):
 
         parser = TLCOutputParser()
         tlc_output_lines: list[str] = []
-        display = TLCOutputDisplay(self.console, module_name)
+        display = TLCOutputDisplay(
+            self.console, module_name, interactive=interactive, silent=silent
+        )
 
         timer: Optional[threading.Timer] = None
         if timeout is not None:

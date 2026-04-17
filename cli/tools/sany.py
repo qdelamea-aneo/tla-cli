@@ -13,7 +13,7 @@ Classes:
 import re
 import subprocess
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from logging import Logger
 from pathlib import Path
@@ -74,6 +74,10 @@ class SANYRun:
     errors: list[SANYDiagnostic] = field(default_factory=list)
     warnings: list[SANYDiagnostic] = field(default_factory=list)
     log_file: Optional[Path] = None
+
+    def to_dict(self) -> dict:
+        """Convert this instance to a JSON-serialisable dictionary."""
+        return asdict(self)
 
 
 # ---------------------------------------------------------------------------
@@ -180,18 +184,29 @@ class SANYOutputDisplay:
     :meth:`show_summary` once after the run completes.
     """
 
-    def __init__(self, console: Console, module_name: str) -> None:
+    def __init__(
+        self,
+        console: Console,
+        module_name: str,
+        *,
+        interactive: bool = True,
+        silent: bool = False,
+    ) -> None:
         self._console = console
         self._module_name = module_name
+        self._interactive = interactive
+        self._silent = silent
         self._live: Optional[Live] = None
+        self._last_module_count: int = 0  # plain-mode state
 
     def __enter__(self) -> "SANYOutputDisplay":
-        self._live = Live(
-            self._render(None),
-            console=self._console,
-            refresh_per_second=10,
-        )
-        self._live.__enter__()
+        if not self._silent and self._interactive:
+            self._live = Live(
+                self._render(None),
+                console=self._console,
+                refresh_per_second=10,
+            )
+            self._live.__enter__()
         return self
 
     def __exit__(self, *args) -> None:
@@ -200,12 +215,38 @@ class SANYOutputDisplay:
             self._live = None
 
     def update(self, parser: SANYOutputParser) -> None:
-        """Refresh the live display from *parser* state."""
-        if self._live:
-            self._live.update(self._render(parser))
+        """Refresh the display from *parser* state."""
+        if self._silent:
+            return
+        if self._interactive:
+            if self._live:
+                self._live.update(self._render(parser))
+        else:
+            # Plain mode: print a line each time a new module appears.
+            semantic = parser.get_modules_semantic()
+            parsed = parser.get_modules_parsed()
+            current = len(semantic) if semantic else len(parsed)
+            if current > self._last_module_count:
+                self._last_module_count = current
+                if semantic:
+                    self._console.print(
+                        f"[dim]{self._module_name}[/dim] · "
+                        f"Semantic analysis: {len(semantic)} module(s)"
+                    )
+                elif parsed:
+                    from pathlib import Path as _Path
+                    self._console.print(
+                        f"[dim]{self._module_name}[/dim] · "
+                        f"Parsing: {_Path(parsed[-1]).name}"
+                    )
 
     def show_summary(self, run: SANYRun) -> None:
-        """Print the final summary panel after the live display has closed."""
+        """Print the final summary panel after the live display has closed.
+
+        No-op when the display is in silent mode.
+        """
+        if self._silent:
+            return
         if run.success:
             modules = run.modules_semantic or run.modules_parsed
             body = Text.assemble(
@@ -303,6 +344,8 @@ class SANY(JavaClassTool):
         *,
         community_modules: bool = False,
         external_modules: Optional[list[Path]] = None,
+        interactive: bool = True,
+        silent: bool = False,
     ) -> SANYRun:
         """Run SANY on *module_path* and return the results.
 
@@ -331,7 +374,9 @@ class SANY(JavaClassTool):
         cmd = self.get_java_command([module_path.name], extra_classpath=extra_cp)
         output_lines: list[str] = []
         parser = SANYOutputParser()
-        display = SANYOutputDisplay(self.console, module_path.stem)
+        display = SANYOutputDisplay(
+            self.console, module_path.stem, interactive=interactive, silent=silent
+        )
 
         with display:
             process = subprocess.Popen(
