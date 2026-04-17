@@ -1,5 +1,8 @@
 """TLC model-checking and simulation commands."""
 
+import json
+import sys
+
 from datetime import timedelta
 from pathlib import Path
 from typing import Optional
@@ -122,6 +125,13 @@ def _common_tlc_options(func):
     show_default=True,
     help="LLM backend to use with --explain.",
 )
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: 'text' for the default Rich display, 'json' for machine-readable output.",
+)
 @error_handler
 def tla_model_check(
     module_path: Path,
@@ -138,6 +148,7 @@ def tla_model_check(
     timeout: Optional[int],
     explain: bool,
     llm_backend: str,
+    output_format: str,
 ) -> None:
     """
     Run the TLC model checker on a TLA+ module file.
@@ -169,6 +180,11 @@ def tla_model_check(
         coverage_interval=coverage,
         timeout=timedelta(seconds=timeout) if timeout is not None else None,
     )
+
+    if output_format == "json":
+        json.dump(run.to_dict(), sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..tools.llm import explain_tlc_error
@@ -218,6 +234,13 @@ def tla_model_check(
     show_default=True,
     help="LLM backend to use with --explain.",
 )
+@click.option(
+    "--format", "output_format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format: 'text' for the default Rich display, 'json' for machine-readable output.",
+)
 @error_handler
 def tla_simulate(
     module_path: Path,
@@ -232,6 +255,7 @@ def tla_simulate(
     timeout: Optional[int],
     explain: bool,
     llm_backend: str,
+    output_format: str,
 ) -> None:
     """
     Run TLC in simulation mode on a TLA+ module file.
@@ -259,6 +283,11 @@ def tla_simulate(
         num_traces=num_traces,
         timeout=timedelta(seconds=timeout) if timeout is not None else None,
     )
+
+    if output_format == "json":
+        json.dump(run.to_dict(), sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..tools.llm import explain_tlc_error
