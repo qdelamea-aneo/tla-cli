@@ -120,7 +120,9 @@ def tla_package_upgrade(pkg_names: tuple[str, ...]) -> None:
 
     for pkg in pkgs_to_upgrade:
         with Live(
-            Spinner("dots", text=f"Upgrading {pkg.name} to version {pkg.latest_version}..."),
+            Spinner(
+                "dots", text=f"Upgrading {pkg.name} to version {pkg.latest_version}..."
+            ),
             console=CONSOLE,
             refresh_per_second=10,
         ) as live:
@@ -129,7 +131,9 @@ def tla_package_upgrade(pkg_names: tuple[str, ...]) -> None:
                 continue
             try:
                 pkg.upgrade()
-                live.update(f"{VALID} Upgraded {pkg.name} to version {pkg.latest_version}.")
+                live.update(
+                    f"{VALID} Upgraded {pkg.name} to version {pkg.latest_version}."
+                )
             except RuntimeError:
                 live.update(f"{CROSS} Failed to upgrade {pkg.name}.")
                 raise

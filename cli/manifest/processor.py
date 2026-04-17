@@ -8,20 +8,18 @@ listed module.
 
 import json
 
-from datetime import timedelta
 from pathlib import Path
 from typing import Optional, Union
 from typing_extensions import Self
 
 import yaml
 
-from pydantic import BaseModel, DirectoryPath, Field, model_validator
+from pydantic import BaseModel, DirectoryPath, model_validator
 from rich.table import Table
 
-from ..constants import CONSOLE, VALID, CROSS, UNCHANGED, tlc, tlapm
+from ..constants import CONSOLE, VALID, CROSS, tlc, tlapm
 from .models import (
     ActionResult,
-    Dependencies,
     Model,
     ModelChecks,
     Module,
@@ -78,8 +76,7 @@ class Manifest(BaseModel):
         for module in self.modules:
             module.path = self._resolve(module.path)
             module.dependencies.external_modules = [
-                self._resolve(ep)
-                for ep in module.dependencies.external_modules
+                self._resolve(ep) for ep in module.dependencies.external_modules
             ]
             for model in module.models:
                 model.path = self._resolve(model.path)
@@ -140,8 +137,7 @@ class Manifest(BaseModel):
                 # Keep actions for this module only when the module stem
                 # (or a specific action within it) appears in the filter list.
                 module_allowed = any(
-                    f == module_stem or f.startswith(f"{module_stem}/")
-                    for f in filters
+                    f == module_stem or f.startswith(f"{module_stem}/") for f in filters
                 )
                 if not module_allowed:
                     continue
@@ -156,9 +152,13 @@ class Manifest(BaseModel):
                         continue
                 cache_key = f"{module_stem}/{model.name}"
                 if skip_passed and cache.get(cache_key):
-                    CONSOLE.print(f"  [dim]▸ Model:[/dim] {model.name} [dim](skipped — passed previously)[/dim]")
+                    CONSOLE.print(
+                        f"  [dim]▸ Model:[/dim] {model.name} [dim](skipped — passed previously)[/dim]"
+                    )
                     continue
-                result = self._run_model(module, model, workers_override, max_heap_override)
+                result = self._run_model(
+                    module, model, workers_override, max_heap_override
+                )
                 results.append(result)
                 if skip_passed:
                     cache[cache_key] = result.overall_ok
@@ -170,7 +170,9 @@ class Manifest(BaseModel):
                         continue
                 cache_key = f"{module_stem}/{proof.name}"
                 if skip_passed and cache.get(cache_key):
-                    CONSOLE.print(f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]")
+                    CONSOLE.print(
+                        f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]"
+                    )
                     continue
                 result = self._run_proof(module, proof)
                 results.append(result)
@@ -253,22 +255,34 @@ class Manifest(BaseModel):
 
         if checks.success:
             mismatches: list[str] = []
-            if checks.total_states is not None and tlc_run.total_states != checks.total_states:
+            if (
+                checks.total_states is not None
+                and tlc_run.total_states != checks.total_states
+            ):
                 mismatches.append(
                     f"total_states={tlc_run.total_states} (expected {checks.total_states})"
                 )
-            if checks.distinct_states is not None and tlc_run.total_distinct_states != checks.distinct_states:
+            if (
+                checks.distinct_states is not None
+                and tlc_run.total_distinct_states != checks.distinct_states
+            ):
                 mismatches.append(
                     f"distinct_states={tlc_run.total_distinct_states} (expected {checks.distinct_states})"
                 )
-            if checks.state_depth is not None and tlc_run.state_depth != checks.state_depth:
+            if (
+                checks.state_depth is not None
+                and tlc_run.state_depth != checks.state_depth
+            ):
                 mismatches.append(
                     f"state_depth={tlc_run.state_depth} (expected {checks.state_depth})"
                 )
             if mismatches:
                 return False, "; ".join(mismatches)
         else:
-            if checks.error_type is not None and tlc_run.error_type != checks.error_type:
+            if (
+                checks.error_type is not None
+                and tlc_run.error_type != checks.error_type
+            ):
                 return False, (
                     f"error_type={tlc_run.error_type!r} (expected {checks.error_type!r})"
                 )
@@ -283,7 +297,9 @@ class Manifest(BaseModel):
         CONSOLE.print(f"  [dim]▸ Proof:[/dim] {proof.name}")
 
         if not tlapm.is_available():
-            CONSOLE.print("    [yellow]tlapm is not installed — skipping proof.[/yellow]")
+            CONSOLE.print(
+                "    [yellow]tlapm is not installed — skipping proof.[/yellow]"
+            )
             return ActionResult(
                 action_type="proof",
                 name=proof.name,

@@ -16,7 +16,8 @@ from ..utils import error_handler
 def _common_tlc_options(func):
     """Decorator that attaches options shared by model-check and simulate."""
     func = click.option(
-        "--workers", "-w",
+        "--workers",
+        "-w",
         metavar="NUM_WORKERS",
         type=int,
         default=1,
@@ -41,7 +42,11 @@ def _common_tlc_options(func):
         "--external-module",
         metavar="MODULE_PATH",
         type=click.Path(
-            exists=True, dir_okay=True, file_okay=True, resolve_path=True, path_type=Path
+            exists=True,
+            dir_okay=True,
+            file_okay=True,
+            resolve_path=True,
+            path_type=Path,
         ),
         multiple=True,
         help="Additional external TLA+ modules or JAR files to include in the classpath.",
@@ -73,12 +78,14 @@ def _common_tlc_options(func):
 )
 @_common_tlc_options
 @click.option(
-    "--save-states", "-s",
+    "--save-states",
+    "-s",
     is_flag=True,
     help="Export the reachable state space as a Graphviz .dot file.",
 )
 @click.option(
-    "--export-json", "-j",
+    "--export-json",
+    "-j",
     is_flag=True,
     help="Export the reachable state space as a JSON file.",
 )
@@ -126,7 +133,8 @@ def _common_tlc_options(func):
     help="LLM backend to use with --explain.",
 )
 @click.option(
-    "--format", "output_format",
+    "--format",
+    "output_format",
     type=click.Choice(["text", "json"], case_sensitive=False),
     default="text",
     show_default=True,
@@ -188,7 +196,10 @@ def tla_model_check(
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..tools.llm import explain_tlc_error
-        explain_tlc_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run)
+
+        explain_tlc_error(
+            run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run
+        )
 
 
 @click.command(name="simulate")
@@ -198,7 +209,8 @@ def tla_model_check(
 )
 @_common_tlc_options
 @click.option(
-    "--depth", "-d",
+    "--depth",
+    "-d",
     metavar="N",
     type=int,
     default=None,
@@ -235,7 +247,8 @@ def tla_model_check(
     help="LLM backend to use with --explain.",
 )
 @click.option(
-    "--format", "output_format",
+    "--format",
+    "output_format",
     type=click.Choice(["text", "json"], case_sensitive=False),
     default="text",
     show_default=True,
@@ -291,4 +304,7 @@ def tla_simulate(
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..tools.llm import explain_tlc_error
-        explain_tlc_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run)
+
+        explain_tlc_error(
+            run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run
+        )

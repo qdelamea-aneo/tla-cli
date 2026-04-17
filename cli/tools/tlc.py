@@ -9,7 +9,7 @@ import json
 import subprocess
 import threading
 
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from logging import Logger
 from pathlib import Path
@@ -374,11 +374,13 @@ class TLC(JavaClassTool):
 
         timer: Optional[threading.Timer] = None
         if timeout is not None:
+
             def _kill():
                 try:
                     process.kill()
                 except ProcessLookupError:
                     pass
+
             timer = threading.Timer(timeout.total_seconds(), _kill)
             timer.daemon = True
             timer.start()

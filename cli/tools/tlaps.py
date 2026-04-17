@@ -31,7 +31,13 @@ from typing import Optional
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.text import Text
 
 from ..packages.base import LocalBinaryPackage
@@ -114,7 +120,9 @@ class TLAPMRun:
 
     @property
     def num_proved(self) -> int:
-        return sum(1 for o in self.obligations.values() if o.status in _SUCCESS_STATUSES)
+        return sum(
+            1 for o in self.obligations.values() if o.status in _SUCCESS_STATUSES
+        )
 
     @property
     def num_failed(self) -> int:
@@ -123,9 +131,7 @@ class TLAPMRun:
     @property
     def num_pending(self) -> int:
         return sum(
-            1
-            for o in self.obligations.values()
-            if o.status not in _FINAL_STATUSES
+            1 for o in self.obligations.values() if o.status not in _FINAL_STATUSES
         )
 
 
@@ -149,9 +155,7 @@ class TLAPMOutputParser:
     _RE_BEGIN = re.compile(r"^@!!BEGIN")
     _RE_END = re.compile(r"^@!!END")
     _RE_INFO_ALL = re.compile(r"\[INFO\].*?All\s+(\d+)\s+obligation")
-    _RE_INFO_SOME = re.compile(
-        r"\[INFO\].*?(\d+)\s+obligation.*?proved"
-    )
+    _RE_INFO_SOME = re.compile(r"\[INFO\].*?(\d+)\s+obligation.*?proved")
 
     def __init__(self) -> None:
         self._in_block: bool = False
@@ -358,7 +362,9 @@ class TLAPMOutputDisplay:
             parts.append(f"{pending} in progress")
 
         description = " · ".join(parts)
-        self._progress.update(self._task_id, description=description, total=total, completed=proved)
+        self._progress.update(
+            self._task_id, description=description, total=total, completed=proved
+        )
 
     def show_summary(self, run: TLAPMRun) -> None:
         """Print the final summary panel after the live display has closed."""
@@ -463,7 +469,7 @@ class TLAPM(Tool):
             cmd.extend(["--stretch", str(stretch)])
         if community_modules and self.community_modules_dir.exists():
             cmd.extend(["-I", str(self.community_modules_dir)])
-        for d in (include_dirs or []):
+        for d in include_dirs or []:
             cmd.extend(["-I", str(d)])
         cmd.append(str(module_path))
 
@@ -483,11 +489,13 @@ class TLAPM(Tool):
         # Optional timeout: kill process after deadline
         timer: Optional[threading.Timer] = None
         if timeout is not None:
+
             def _kill():
                 try:
                     process.kill()
                 except ProcessLookupError:
                     pass
+
             timer = threading.Timer(timeout.total_seconds(), _kill)
             timer.daemon = True
             timer.start()

@@ -5,7 +5,14 @@ import rich_click as click
 from rich.panel import Panel
 from rich.text import Text
 
-from .commands import tla_package, tla_model_check, tla_simulate, tla_parse, tla_proof_check, tla_run
+from .commands import (
+    tla_package,
+    tla_model_check,
+    tla_simulate,
+    tla_parse,
+    tla_proof_check,
+    tla_run,
+)
 from .constants import CONSOLE, WORKDIR, TOOLS_DIR, repl
 from .utils import AliasedGroup, error_handler
 
@@ -23,10 +30,15 @@ def _show_vibecode_warning() -> None:
         ("vibecoded", "bold yellow underline"),
         (" — generated mostly by an AI.\n", "bold yellow"),
         "\n",
-        ("It may contain bugs, produce incorrect output, or behave\n"
-         "unexpectedly. ", ""),
-        ("Treat all results with appropriate scepticism\n"
-         "and verify against the raw TLC output when in doubt.", "dim"),
+        (
+            "It may contain bugs, produce incorrect output, or behave\nunexpectedly. ",
+            "",
+        ),
+        (
+            "Treat all results with appropriate scepticism\n"
+            "and verify against the raw TLC output when in doubt.",
+            "dim",
+        ),
         "\n\n",
         ("To suppress this warning: ", "dim"),
         ("export TLA_NO_VIBECODE_WARNING=1", "bold cyan"),

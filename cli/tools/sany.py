@@ -23,7 +23,6 @@ from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
 from rich.spinner import Spinner
-from rich.table import Table
 from rich.text import Text
 
 from ..packages import GithubReleasePackage
@@ -224,7 +223,9 @@ class SANYOutputDisplay:
             for diag in run.errors[:5]:
                 body_lines.append(Text(f"  {diag.message[:120]}", style="red"))
             if len(run.errors) > 5:
-                body_lines.append(Text(f"  … and {len(run.errors) - 5} more", style="dim"))
+                body_lines.append(
+                    Text(f"  … and {len(run.errors) - 5} more", style="dim")
+                )
             body = Text("\n").join(body_lines)
 
         style = "green" if run.success else "red"

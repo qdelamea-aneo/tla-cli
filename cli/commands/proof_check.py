@@ -81,9 +81,7 @@ def tla_proof_check(
     any obligation fails to be proved.
     """
     if not tlapm.is_available():
-        raise click.ClickException(
-            "tlapm is not installed.  Install it and re-run."
-        )
+        raise click.ClickException("tlapm is not installed.  Install it and re-run.")
 
     for p in external_module:
         if p.is_file() and p.suffix == ".jar":
@@ -108,6 +106,7 @@ def tla_proof_check(
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..tools.llm import explain_tlapm_error
+
         explain_tlapm_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend)
 
     if not run.success:

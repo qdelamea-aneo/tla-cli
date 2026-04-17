@@ -139,17 +139,25 @@ class LocalBinaryPackage(Package):
 
     @property
     def latest_version(self) -> None:  # type: ignore[override]
-        raise NotImplementedError("LocalBinaryPackage does not support version management")
+        raise NotImplementedError(
+            "LocalBinaryPackage does not support version management"
+        )
 
     @property
     def is_up_to_date(self) -> bool:
         return self.is_installed
 
     def version_exists(self, version) -> bool:  # type: ignore[override]
-        raise NotImplementedError("LocalBinaryPackage does not support version management")
+        raise NotImplementedError(
+            "LocalBinaryPackage does not support version management"
+        )
 
     def install(self, pkg_version) -> None:  # type: ignore[override]
-        raise NotImplementedError("LocalBinaryPackage does not support version management")
+        raise NotImplementedError(
+            "LocalBinaryPackage does not support version management"
+        )
 
     def uninstall(self) -> None:
-        raise NotImplementedError("LocalBinaryPackage does not support version management")
+        raise NotImplementedError(
+            "LocalBinaryPackage does not support version management"
+        )

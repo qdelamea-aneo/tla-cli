@@ -15,7 +15,8 @@ from ..utils import error_handler
     type=click.Path(exists=True, dir_okay=False, resolve_path=True, path_type=Path),
 )
 @click.option(
-    "--filter", "-f",
+    "--filter",
+    "-f",
     "filters",
     metavar="SPEC",
     multiple=True,
@@ -26,7 +27,8 @@ from ..utils import error_handler
     ),
 )
 @click.option(
-    "--workers", "-w",
+    "--workers",
+    "-w",
     metavar="N",
     type=int,
     default=None,

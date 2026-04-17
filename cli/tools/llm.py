@@ -33,8 +33,6 @@ from rich.markdown import Markdown
 from rich.rule import Rule
 
 if TYPE_CHECKING:
-    from .sany import SANYRun
-    from .tlaps import TLAPMRun
     from .tlc import TLCRun
 
 
@@ -169,6 +167,7 @@ class ClaudeBackend(LLMBackend):
     def __init__(self, model: str = "claude-sonnet-4-6") -> None:
         try:
             import anthropic  # type: ignore[import]
+
             self._anthropic = anthropic
         except ImportError:
             raise ImportError(
@@ -215,11 +214,10 @@ class OpenAIBackend(LLMBackend):
     def __init__(self, model: str = "gpt-4o") -> None:
         try:
             import openai  # type: ignore[import]
+
             self._openai = openai
         except ImportError:
-            raise ImportError(
-                "openai package not installed — run: pip install openai"
-            )
+            raise ImportError("openai package not installed — run: pip install openai")
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set.")
@@ -264,6 +262,7 @@ class GeminiBackend(LLMBackend):
     def __init__(self, model: str = "gemini-1.5-pro") -> None:
         try:
             import google.generativeai as genai  # type: ignore[import]
+
             self._genai = genai
         except ImportError:
             raise ImportError(
@@ -307,6 +306,7 @@ class MistralBackend(LLMBackend):
     def __init__(self, model: str = "mistral-large-latest") -> None:
         try:
             from mistralai import Mistral  # type: ignore[import]
+
             self._Mistral = Mistral
         except ImportError:
             raise ImportError(

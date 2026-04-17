@@ -72,6 +72,7 @@ def tla_parse(
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..tools.llm import explain_sany_error
+
         explain_sany_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend)
 
     if not run.success:
