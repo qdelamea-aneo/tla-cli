@@ -23,6 +23,7 @@ from .constants import (
     tla2tools,
     community_modules,
     tlc,
+    tlapm,
     repl,
 )
 from .utils import AliasedGroup, error_handler
@@ -96,23 +97,13 @@ def cli(ctx: click.Context, manifest: Path) -> None:
         if manifest is None and repl.is_available():
             _show_vibecode_warning()
             repl.start()
-        else:
+        elif manifest is not None:
             from .models import Manifest
 
             manifest_obj = Manifest.load_manifest(manifest)
-            results = manifest_obj.process()
-
-            table = Table(title="TLA+ Modules Processing Summary")
-            table.add_column("Module", no_wrap=True, justify="center")
-            table.add_column("Success", justify="center")
-
-            for module_path, success in results.items():
-                table.add_row(
-                    module_path.name,
-                    VALID if success else CROSS,
-                )
-
-            CONSOLE.print(table)
+            manifest_obj.process()
+        else:
+            click.echo(ctx.get_help())
 
 
 @cli.group(name="package")
