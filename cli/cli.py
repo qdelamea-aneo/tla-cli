@@ -2,12 +2,10 @@ import os
 
 import rich_click as click
 
-from pathlib import Path
-
 from rich.panel import Panel
 from rich.text import Text
 
-from .commands import tla_package, tla_model_check, tla_simulate, tla_parse, tla_proof_check
+from .commands import tla_package, tla_model_check, tla_simulate, tla_parse, tla_proof_check, tla_run
 from .constants import CONSOLE, WORKDIR, TOOLS_DIR, repl
 from .utils import AliasedGroup, error_handler
 
@@ -55,14 +53,9 @@ def _show_vibecode_warning() -> None:
     invoke_without_command=True,
 )
 @click.version_option(version="0.1.0", prog_name="tla-cli")
-@click.option(
-    "--manifest", "-m",
-    type=click.Path(exists=True, dir_okay=False, resolve_path=True, path_type=Path),
-    help="Path to a manifest file defining TLA+ modules processing.",
-)
 @click.pass_context
 @error_handler
-def cli(ctx: click.Context, manifest: Path) -> None:
+def cli(ctx: click.Context) -> None:
     """
     Command-line tool to simplify working with TLA+.
     """
@@ -70,12 +63,9 @@ def cli(ctx: click.Context, manifest: Path) -> None:
     TOOLS_DIR.mkdir(exist_ok=True)
 
     if ctx.invoked_subcommand is None:
-        if manifest is None and repl.is_available():
+        if repl.is_available():
             _show_vibecode_warning()
             repl.start()
-        elif manifest is not None:
-            from .manifest import Manifest
-            Manifest.load_manifest(manifest).process()
         else:
             click.echo(ctx.get_help())
 
@@ -85,6 +75,7 @@ cli.add_command(tla_model_check)
 cli.add_command(tla_simulate)
 cli.add_command(tla_parse)
 cli.add_command(tla_proof_check)
+cli.add_command(tla_run)
 
 
 if __name__ == "__main__":
