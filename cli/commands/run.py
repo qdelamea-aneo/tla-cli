@@ -23,4 +23,6 @@ def tla_run(manifest_path: Path) -> None:
     """
     from ..manifest import Manifest
 
-    Manifest.load_manifest(manifest_path).process()
+    results = Manifest.load_manifest(manifest_path).process()
+    if any(not r.overall_ok for r in results):
+        raise SystemExit(1)
