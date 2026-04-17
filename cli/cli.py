@@ -24,6 +24,7 @@ from .constants import (
     community_modules,
     tlc,
     tlapm,
+    sany,
     repl,
 )
 from .utils import AliasedGroup, error_handler
@@ -532,6 +533,112 @@ def tla_simulate(
             backend_name=llm_backend,
             tlc_run=run,
         )
+
+
+@cli.command(name="parse")
+@click.argument(
+    "module_path",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True, path_type=Path),
+)
+@click.option(
+    "--community-modules/--no-community-modules",
+    default=True,
+    show_default=True,
+    help="Whether to include CommunityModules in the classpath.",
+)
+@click.option(
+    "--external-module",
+    metavar="MODULE_PATH",
+    type=click.Path(
+        exists=True, dir_okay=True, file_okay=True, resolve_path=True, path_type=Path
+    ),
+    multiple=True,
+    help="Additional external TLA+ modules or JAR files to include in the classpath.",
+)
+@error_handler
+def tla_parse(
+    module_path: Path,
+    community_modules: bool,
+    external_module: tuple[Path, ...],
+) -> None:
+    """
+    Parse and type-check a TLA+ module with SANY.
+
+    Runs the SANY parser and semantic analyser from tla2tools.jar on the
+    given module file.  Exits with a non-zero status when SANY reports any
+    errors.
+    """
+    if not sany.is_available():
+        raise click.ClickException(
+            "tla2tools is not installed.  Run 'tla package install tla2tools'."
+        )
+
+    run = sany.parse(
+        module_path,
+        community_modules=community_modules,
+        external_modules=list(external_module),
+    )
+
+    if not run.success:
+        raise SystemExit(1)
+
+
+@cli.command(name="prove")
+@click.argument(
+    "module_path",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True, path_type=Path),
+)
+@click.option(
+    "--stretch",
+    metavar="FACTOR",
+    type=float,
+    default=None,
+    help="Multiply all backend timeouts by FACTOR (passed as --stretch to tlapm).",
+)
+@click.option(
+    "--community-modules/--no-community-modules",
+    default=True,
+    show_default=True,
+    help="Whether to add the CommunityModules directory to tlapm's search path (-I).",
+)
+@click.option(
+    "--timeout",
+    metavar="SECONDS",
+    type=int,
+    default=None,
+    help="Kill tlapm after SECONDS seconds.",
+)
+@error_handler
+def tla_prove(
+    module_path: Path,
+    stretch: Optional[float],
+    community_modules: bool,
+    timeout: Optional[int],
+) -> None:
+    """
+    Check TLA+ proofs with TLAPS (tlapm).
+
+    Runs tlapm in toolbox mode on the given proof file and displays
+    per-obligation proving progress.  Exits with a non-zero status when
+    any obligation fails to be proved.
+    """
+    from datetime import timedelta
+
+    if not tlapm.is_available():
+        raise click.ClickException(
+            "tlapm is not installed.  Install it and re-run."
+        )
+
+    timeout_td = timedelta(seconds=timeout) if timeout is not None else None
+    run = tlapm.prove(
+        module_path,
+        stretch=stretch,
+        community_modules=community_modules,
+        timeout=timeout_td,
+    )
+
+    if not run.success:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

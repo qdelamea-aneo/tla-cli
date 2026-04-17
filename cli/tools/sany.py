@@ -324,7 +324,9 @@ class SANY(JavaClassTool):
             for ext in external_modules:
                 self.classpath.append(ext)
 
-            cmd = self.get_java_command([str(module_path)])
+            # Pass just the filename; SANY is launched with cwd=module_path.parent
+            # so sibling .tla files are found automatically.
+            cmd = self.get_java_command([module_path.name])
         finally:
             self.classpath = saved_classpath
         output_lines: list[str] = []
@@ -336,6 +338,7 @@ class SANY(JavaClassTool):
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                cwd=module_path.parent,
                 text=True,
             )
             if process.stdout is None:
