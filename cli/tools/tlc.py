@@ -12,7 +12,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
 from logging import Logger
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Union
 
 from rich.console import Console
 
@@ -182,7 +182,7 @@ class TLC(JavaClassTool):
         module_path: Path,
         model_path: Path,
         *,
-        workers: int,
+        workers: Union[int, str] = 1,
         max_heap_size: str,
         community_modules: bool,
         external_modules: list[Path],
@@ -225,7 +225,8 @@ class TLC(JavaClassTool):
         run_dir = self.create_run_dir()
         tlc_run = TLCRun(started_at=datetime.now())
 
-        # Configure JVM
+        # Configure JVM — save and restore classpath so repeated calls don't accumulate entries
+        saved_classpath = list(self.classpath)
         self.parallel_gc = True
         self.max_heap_size = max_heap_size
         if community_modules:
@@ -256,6 +257,7 @@ class TLC(JavaClassTool):
 
         tlc_args.append(str(module_path))
         cmd = self.get_java_command(tlc_args)
+        self.classpath = saved_classpath  # restore before launching
 
         tlc_output, process, display = self._run_process(
             cmd, run_dir, module_path.stem, tlc_run, show_log
@@ -312,7 +314,8 @@ class TLC(JavaClassTool):
         run_dir = self.create_run_dir()
         tlc_run = TLCRun(started_at=datetime.now())
 
-        # Configure JVM
+        # Configure JVM — save and restore classpath so repeated calls don't accumulate entries
+        saved_classpath = list(self.classpath)
         self.parallel_gc = True
         self.max_heap_size = max_heap_size
         if community_modules:
@@ -333,6 +336,7 @@ class TLC(JavaClassTool):
 
         tlc_args.append(str(module_path))
         cmd = self.get_java_command(tlc_args)
+        self.classpath = saved_classpath  # restore before launching
 
         tlc_output, process, display = self._run_process(
             cmd, run_dir, module_path.stem, tlc_run, show_log

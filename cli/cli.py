@@ -583,7 +583,7 @@ def tla_parse(
         raise SystemExit(1)
 
 
-@cli.command(name="prove")
+@cli.command(name="proof-check")
 @click.argument(
     "module_path",
     type=click.Path(exists=True, dir_okay=False, resolve_path=True, path_type=Path),
@@ -609,7 +609,7 @@ def tla_parse(
     help="Kill tlapm after SECONDS seconds.",
 )
 @error_handler
-def tla_prove(
+def tla_proof_check(
     module_path: Path,
     stretch: Optional[float],
     community_modules: bool,

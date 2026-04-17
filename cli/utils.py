@@ -59,7 +59,7 @@ class AliasedGroup(click.RichGroup):
             "mc": "model-check",
             "sim": "simulate",
             "p": "parse",
-            "pr": "prove",
+            "pc": "proof-check",
         }
         if cmd_name in aliases:
             return click.Group.get_command(self, ctx, aliases[cmd_name])
