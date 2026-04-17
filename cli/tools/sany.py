@@ -273,6 +273,8 @@ class SANY(JavaClassTool):
     Attributes:
         community_modules: Package providing the CommunityModules JAR
             (added to the classpath when requested).
+        data_path: Base directory under which per-run log directories are
+            created.  When ``None``, no log file is saved.
     """
 
     def __init__(
@@ -281,6 +283,7 @@ class SANY(JavaClassTool):
         pkg: GithubReleasePackage,
         logger: Logger,
         console: Console,
+        data_path: Optional[Path] = None,
     ) -> None:
         super().__init__(
             name="SANY",
@@ -291,6 +294,7 @@ class SANY(JavaClassTool):
             console=console,
         )
         self.community_modules = community_modules
+        self.data_path = data_path
 
     def parse(
         self,
@@ -349,6 +353,15 @@ class SANY(JavaClassTool):
         run.duration = run.ended_at - run.started_at
         run.success = process.returncode == 0
         parser.populate_run(run)
+
+        if self.data_path is not None:
+            run_dir = (
+                self.data_path
+                / f"sany-run-{run.started_at.strftime('%Y-%m-%d-%H-%M-%S')}"
+            )
+            run_dir.mkdir(parents=True, exist_ok=True)
+            run.log_file = run_dir / "sany.log"
+            run.log_file.write_text("".join(output_lines))
 
         display.show_summary(run)
         return run

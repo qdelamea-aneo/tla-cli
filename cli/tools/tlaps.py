@@ -414,6 +414,8 @@ class TLAPM(Tool):
         binary_path: Absolute path to the ``tlapm`` executable.
         community_modules_dir: Directory containing CommunityModules
             ``.tla`` files, added via ``-I`` when requested.
+        data_path: Base directory under which per-run log directories are
+            created.  When ``None``, no log file is saved.
     """
 
     def __init__(
@@ -422,10 +424,12 @@ class TLAPM(Tool):
         community_modules_dir: Path,
         logger: Logger,
         console: Console,
+        data_path: Optional[Path] = None,
     ) -> None:
         super().__init__("tlapm", pkg, logger, console)
         self.binary_path = pkg.location
         self.community_modules_dir = community_modules_dir
+        self.data_path = data_path
 
     def prove(
         self,
@@ -507,6 +511,15 @@ class TLAPM(Tool):
         # Determine success: no failed obligations and process exited cleanly
         failed = sum(1 for o in run.obligations.values() if o.status == FAILED)
         run.success = (process.returncode == 0) and (failed == 0)
+
+        if self.data_path is not None:
+            run_dir = (
+                self.data_path
+                / f"tlapm-run-{run.started_at.strftime('%Y-%m-%d-%H-%M-%S')}"
+            )
+            run_dir.mkdir(parents=True, exist_ok=True)
+            run.log_file = run_dir / "tlapm.log"
+            run.log_file.write_text("".join(output_lines))
 
         display.show_summary(run)
         return run

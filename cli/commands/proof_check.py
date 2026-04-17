@@ -6,7 +6,7 @@ from typing import Optional
 
 import rich_click as click
 
-from ..constants import tlapm
+from ..constants import CONSOLE, tlapm
 from ..utils import error_handler
 
 
@@ -47,6 +47,22 @@ from ..utils import error_handler
     default=None,
     help="Kill tlapm after SECONDS seconds.",
 )
+@click.option(
+    "--explain",
+    is_flag=True,
+    default=False,
+    help=(
+        "On failure, send the tlapm log to an LLM and stream a human-readable "
+        "explanation to the terminal. Use --llm-backend to select the model."
+    ),
+)
+@click.option(
+    "--llm-backend",
+    type=click.Choice(["claude", "openai", "gemini", "mistral"], case_sensitive=False),
+    default="claude",
+    show_default=True,
+    help="LLM backend to use with --explain.",
+)
 @error_handler
 def tla_proof_check(
     module_path: Path,
@@ -54,6 +70,8 @@ def tla_proof_check(
     community_modules: bool,
     external_module: tuple[Path, ...],
     timeout: Optional[int],
+    explain: bool,
+    llm_backend: str,
 ) -> None:
     """
     Check TLA+ proofs with TLAPS (tlapm).
@@ -87,6 +105,10 @@ def tla_proof_check(
         include_dirs=include_dirs,
         timeout=timeout_td,
     )
+
+    if explain and not run.success and run.log_file and run.log_file.exists():
+        from ..tools.llm import explain_tlapm_error
+        explain_tlapm_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend)
 
     if not run.success:
         raise SystemExit(1)

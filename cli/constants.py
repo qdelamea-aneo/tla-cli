@@ -48,6 +48,7 @@ sany = SANY(
     pkg=tla2tools,
     logger=LOGGER,
     console=CONSOLE,
+    data_path=RUN_DATA_DIR,
 )
 
 _tlapm_binary = TOOLS_DIR / "tlapm" / "bin" / "tlapm"
@@ -62,4 +63,5 @@ tlapm = TLAPM(
     community_modules_dir=TOOLS_DIR / "CommunityModules-deps",
     logger=LOGGER,
     console=CONSOLE,
+    data_path=RUN_DATA_DIR,
 )

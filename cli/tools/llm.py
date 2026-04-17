@@ -33,6 +33,8 @@ from rich.markdown import Markdown
 from rich.rule import Rule
 
 if TYPE_CHECKING:
+    from .sany import SANYRun
+    from .tlaps import TLAPMRun
     from .tlc import TLCRun
 
 
@@ -65,6 +67,52 @@ _TRACE_GUIDANCE = """\
    sequence of state transitions led to the violation and why that sequence
    is problematic.
 
+"""
+
+_SANY_EXPLAIN_PROMPT = """\
+You are an expert TLA+ developer and formal methods engineer.
+
+The SANY TLA+ parser and type-checker produced the output below.  Analyse it
+and write a clear, actionable explanation aimed at the developer who wrote the
+spec.
+
+Focus on:
+1. Which specific parse or semantic error(s) SANY detected — name the module,
+   line, and symbol when available.
+2. Why the error occurs (e.g. missing definition, scope issue, operator
+   misuse).
+3. The minimal change required to fix each error.
+
+Be concise. Use Markdown with short paragraphs and bullet lists. Do **not**
+repeat the raw SANY output verbatim; paraphrase and highlight what matters.
+
+<sany_output>
+{log_content}
+</sany_output>
+"""
+
+_TLAPM_EXPLAIN_PROMPT = """\
+You are an expert TLA+ developer and formal methods engineer familiar with
+the TLA+ Proof System (TLAPS) and its backend provers (Zenon, TLAPS SMT,
+Isabelle/TLA+).
+
+The tlapm prover produced the output below.  Analyse it and write a clear,
+actionable explanation aimed at the developer who wrote the proof.
+
+Focus on:
+1. Which proof obligation(s) failed or timed out — identify them by location
+   when possible.
+2. Why the prover could not discharge them (e.g. missing lemma, wrong
+   decomposition, backend limitation).
+3. Concrete steps to fix or work around each failed obligation (rewrite the
+   proof step, add a BY hint, switch backends, increase timeout, etc.).
+
+Be concise. Use Markdown with short paragraphs and bullet lists. Do **not**
+repeat the raw tlapm output verbatim; paraphrase and highlight what matters.
+
+<tlapm_output>
+{log_content}
+</tlapm_output>
 """
 
 # Maximum characters of TLC log sent to the model — avoids blowing the context
@@ -363,6 +411,122 @@ def explain_tlc_error(
         log_content=truncated,
         trace_guidance=_TRACE_GUIDANCE if has_trace else "",
     )
+
+    console.print()
+    console.print(
+        Rule(
+            f"[bold cyan]LLM Explanation ({backend.display_name})[/bold cyan]",
+            style="cyan",
+        )
+    )
+    console.print()
+
+    accumulated = ""
+    try:
+        with Live("", console=console, refresh_per_second=15) as live:
+            for chunk in backend.stream_explanation(prompt):
+                accumulated += chunk
+                live.update(Markdown(accumulated))
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]LLM request failed:[/red] {exc}")
+        return
+
+    console.print()
+
+
+def explain_sany_error(
+    log_content: str,
+    console: Console,
+    *,
+    backend_name: str = "claude",
+) -> None:
+    """Send a SANY log to an LLM and stream a formatted explanation to the terminal.
+
+    Behaves like :func:`explain_tlc_error` but uses a SANY-specific prompt.
+
+    Args:
+        log_content: Full text of the SANY run log.
+        console: Rich :class:`~rich.console.Console` used for all output.
+        backend_name: One of ``"claude"``, ``"openai"``, ``"gemini"``,
+            ``"mistral"`` (default: ``"claude"``).
+    """
+    BackendClass = BACKENDS.get(backend_name)
+    if BackendClass is None:
+        console.print(
+            f"[yellow]⚠ Unknown LLM backend: '{backend_name}'. "
+            f"Choose one of: {', '.join(BACKEND_NAMES)}.[/yellow]"
+        )
+        return
+
+    try:
+        backend = BackendClass()
+    except (ImportError, ValueError) as exc:
+        console.print(f"[yellow]⚠ {exc}[/yellow]")
+        return
+
+    truncated = log_content[:_MAX_LOG_CHARS]
+    if len(log_content) > _MAX_LOG_CHARS:
+        truncated += "\n[... log truncated ...]"
+
+    prompt = _SANY_EXPLAIN_PROMPT.format(log_content=truncated)
+
+    console.print()
+    console.print(
+        Rule(
+            f"[bold cyan]LLM Explanation ({backend.display_name})[/bold cyan]",
+            style="cyan",
+        )
+    )
+    console.print()
+
+    accumulated = ""
+    try:
+        with Live("", console=console, refresh_per_second=15) as live:
+            for chunk in backend.stream_explanation(prompt):
+                accumulated += chunk
+                live.update(Markdown(accumulated))
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]LLM request failed:[/red] {exc}")
+        return
+
+    console.print()
+
+
+def explain_tlapm_error(
+    log_content: str,
+    console: Console,
+    *,
+    backend_name: str = "claude",
+) -> None:
+    """Send a tlapm log to an LLM and stream a formatted explanation to the terminal.
+
+    Behaves like :func:`explain_tlc_error` but uses a tlapm-specific prompt.
+
+    Args:
+        log_content: Full text of the tlapm run log.
+        console: Rich :class:`~rich.console.Console` used for all output.
+        backend_name: One of ``"claude"``, ``"openai"``, ``"gemini"``,
+            ``"mistral"`` (default: ``"claude"``).
+    """
+    BackendClass = BACKENDS.get(backend_name)
+    if BackendClass is None:
+        console.print(
+            f"[yellow]⚠ Unknown LLM backend: '{backend_name}'. "
+            f"Choose one of: {', '.join(BACKEND_NAMES)}.[/yellow]"
+        )
+        return
+
+    try:
+        backend = BackendClass()
+    except (ImportError, ValueError) as exc:
+        console.print(f"[yellow]⚠ {exc}[/yellow]")
+        return
+
+    truncated = log_content[:_MAX_LOG_CHARS]
+    if len(log_content) > _MAX_LOG_CHARS:
+        truncated += "\n[... log truncated ...]"
+
+    prompt = _TLAPM_EXPLAIN_PROMPT.format(log_content=truncated)
 
     console.print()
     console.print(
