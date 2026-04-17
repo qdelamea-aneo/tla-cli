@@ -268,6 +268,7 @@ class TLC(JavaClassTool):
         external_modules: list[Path],
         depth: Optional[int] = None,
         seed: Optional[int] = None,
+        num_traces: Optional[int] = None,
         show_log: bool = False,
     ) -> TLCRun:
         """Run TLC in simulation mode and return the results.
@@ -286,6 +287,8 @@ class TLC(JavaClassTool):
                 classpath.
             depth: Maximum depth of each simulated trace (``-depth N``).
             seed: Random seed for reproducible simulation (``-seed N``).
+            num_traces: Number of traces to simulate before stopping
+                (``-numTraces N``).  By default TLC simulates indefinitely.
             show_log: If ``True``, also print raw TLC output lines to the console.
 
         Returns:
@@ -299,6 +302,8 @@ class TLC(JavaClassTool):
             tlc_args.extend(["-depth", str(depth)])
         if seed is not None:
             tlc_args.extend(["-seed", str(seed)])
+        if num_traces is not None:
+            tlc_args.extend(["-numTraces", str(num_traces)])
         tlc_args.append(str(module_path))
 
         extra_cp = self._build_extra_classpath(community_modules, external_modules)

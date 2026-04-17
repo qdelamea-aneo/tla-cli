@@ -186,6 +186,13 @@ def tla_model_check(
     help="Random seed for reproducible simulation.",
 )
 @click.option(
+    "--num-traces",
+    metavar="N",
+    type=int,
+    default=None,
+    help="Stop after simulating N traces (default: run indefinitely).",
+)
+@click.option(
     "--explain",
     is_flag=True,
     default=False,
@@ -211,6 +218,7 @@ def tla_simulate(
     external_module: list[Path],
     depth: Optional[int],
     seed: Optional[int],
+    num_traces: Optional[int],
     explain: bool,
     llm_backend: str,
 ) -> None:
@@ -237,6 +245,7 @@ def tla_simulate(
         external_modules=list(external_module),
         depth=depth,
         seed=seed,
+        num_traces=num_traces,
     )
 
     if explain and not run.success and run.log_file and run.log_file.exists():
