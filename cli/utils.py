@@ -55,8 +55,9 @@ class AliasedGroup(click.RichGroup):
         rv = super().get_command(ctx, cmd_name)
         if rv is not None:
             return rv
-        if cmd_name == "mc":
-            return click.Group.get_command(self, ctx, "model-check")
+        aliases = {"mc": "model-check", "sim": "simulate"}
+        if cmd_name in aliases:
+            return click.Group.get_command(self, ctx, aliases[cmd_name])
         return None
 
     def resolve_command(

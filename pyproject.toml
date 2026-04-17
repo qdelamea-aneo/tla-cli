@@ -14,9 +14,18 @@ dependencies = [
     "rich-click>=1.9.2",
 ]
 
+[project.optional-dependencies]
+llm = [
+    "anthropic>=0.40.0",
+    "openai>=1.0.0",
+    "google-generativeai>=0.8.0",
+    "mistralai>=1.0.0",
+]
+
 [dependency-groups]
 dev = [
     "mypy>=1.18.2",
+    "pytest>=8.0.0",
     "ruff>=0.14.0",
 ]
 
