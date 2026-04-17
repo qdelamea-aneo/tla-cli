@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from cli.tools.tlc import TLC, TLCRun
+from tla_cli.tools.tlc import TLC, TLCRun
 
 
 # ---------------------------------------------------------------------------

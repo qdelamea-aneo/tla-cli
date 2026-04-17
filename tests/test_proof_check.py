@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 from pathlib import Path
 
-from cli.cli import cli
+from tla_cli.cli import cli
 
 
 # ---------------------------------------------------------------------------

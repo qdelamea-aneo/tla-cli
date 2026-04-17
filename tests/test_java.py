@@ -8,7 +8,7 @@ between calls.
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from cli.tools.java import JavaClassTool
+from tla_cli.tools.java import JavaClassTool
 
 
 # ---------------------------------------------------------------------------

@@ -31,7 +31,7 @@ dev = [
 ]
 
 [project.scripts]
-tla = "cli.cli:cli"
+tla = "tla_cli.cli:cli"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
@@ -44,4 +44,4 @@ source = "uv-dynamic-versioning"
 local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
-packages = ["cli"]
+packages = ["tla_cli"]
