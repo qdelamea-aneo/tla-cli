@@ -89,11 +89,24 @@ class Manifest(BaseModel):
     # Processing
     # ------------------------------------------------------------------
 
-    def process(self) -> list[ActionResult]:
+    def process(
+        self,
+        filters: Optional[list[str]] = None,
+        workers_override: Optional[int] = None,
+        max_heap_override: Optional[str] = None,
+    ) -> list[ActionResult]:
         """Process all modules defined in the manifest.
 
         Runs each model check and proof check in sequence, printing a
         section header for each module and a summary table at the end.
+
+        Args:
+            filters: If provided, only run actions whose identifier matches
+                one of the filter strings.  Each string is either
+                ``"MODULE_STEM"`` (run all actions for that module) or
+                ``"MODULE_STEM/ACTION_NAME"`` (run a single action).
+            workers_override: Override the worker count for every model check.
+            max_heap_override: Override the JVM heap size for every model check.
 
         Returns:
             List of :class:`ActionResult` objects, one per action.
@@ -107,13 +120,35 @@ class Manifest(BaseModel):
             if not (module.models or module.proofs):
                 continue
 
+            # ------ module-level filter ------
+            module_stem = module.path.stem
+            if filters:
+                # Keep actions for this module only when the module stem
+                # (or a specific action within it) appears in the filter list.
+                module_allowed = any(
+                    f == module_stem or f.startswith(f"{module_stem}/")
+                    for f in filters
+                )
+                if not module_allowed:
+                    continue
+
             CONSOLE.print()
             CONSOLE.print(f"[bold cyan]Module:[/bold cyan] {module.path.name}")
 
             for model in module.models:
-                results.append(self._run_model(module, model))
+                if filters:
+                    action_key = f"{module_stem}/{model.name}"
+                    if not any(f in (module_stem, action_key) for f in filters):
+                        continue
+                results.append(
+                    self._run_model(module, model, workers_override, max_heap_override)
+                )
 
             for proof in module.proofs:
+                if filters:
+                    action_key = f"{module_stem}/{proof.name}"
+                    if not any(f in (module_stem, action_key) for f in filters):
+                        continue
                 results.append(self._run_proof(module, proof))
 
         self._print_summary(results)
@@ -123,19 +158,30 @@ class Manifest(BaseModel):
     # Internal: model check
     # ------------------------------------------------------------------
 
-    def _run_model(self, module: Module, model: Model) -> ActionResult:
+    def _run_model(
+        self,
+        module: Module,
+        model: Model,
+        workers_override: Optional[int] = None,
+        max_heap_override: Optional[str] = None,
+    ) -> ActionResult:
         CONSOLE.print(f"  [dim]▸ Model:[/dim] {model.name}")
 
-        workers_arg: Union[int, str] = (
-            "auto" if model.settings.workers == "auto" else int(model.settings.workers)
-        )
+        if workers_override is not None:
+            workers_arg: Union[int, str] = workers_override
+        elif model.settings.workers == "auto":
+            workers_arg = "auto"
+        else:
+            workers_arg = int(model.settings.workers)
+
+        heap = max_heap_override or model.settings.max_heap_size
 
         try:
             tlc_run = tlc.start(
                 module.path,
                 model.path,
                 workers=workers_arg,
-                max_heap_size=model.settings.max_heap_size,
+                max_heap_size=heap,
                 community_modules=module.dependencies.community_modules,
                 external_modules=module.dependencies.external_modules,
             )
