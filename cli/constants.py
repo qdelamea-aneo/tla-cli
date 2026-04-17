@@ -5,8 +5,8 @@ from pathlib import Path
 from rich.console import Console
 from rich.logging import RichHandler
 
-from .packages import TLA2Tools, CommunityModules
-from .tools import TLC, REPL
+from .packages import TLA2Tools, CommunityModules, LocalBinaryPackage
+from .tools import TLC, REPL, SANY, TLAPM
 
 
 VALID = "[green]✓[/green]"
@@ -39,6 +39,27 @@ tlc = TLC(
     data_path=RUN_DATA_DIR,
     community_modules=community_modules,
     pkg=tla2tools,
+    logger=LOGGER,
+    console=CONSOLE,
+)
+
+sany = SANY(
+    community_modules=community_modules,
+    pkg=tla2tools,
+    logger=LOGGER,
+    console=CONSOLE,
+)
+
+_tlapm_binary = TOOLS_DIR / "tlapm" / "bin" / "tlapm"
+_tlapm_pkg = LocalBinaryPackage(
+    name="tlapm",
+    location=_tlapm_binary,
+    logger=LOGGER,
+    console=CONSOLE,
+)
+tlapm = TLAPM(
+    pkg=_tlapm_pkg,
+    community_modules_dir=TOOLS_DIR / "CommunityModules-deps",
     logger=LOGGER,
     console=CONSOLE,
 )

@@ -112,3 +112,44 @@ class Package(ABC):
         Uninstall the package.
         """
         pass
+
+
+class LocalBinaryPackage(Package):
+    """A locally installed binary or directory that requires no version management.
+
+    Useful for tools (e.g. ``tlapm``) that are installed by an external
+    mechanism and do not need GitHub-based download or upgrade logic.
+
+    The package is considered *installed* when :attr:`~Package.location` exists
+    on the filesystem.  All version-management methods raise
+    :exc:`NotImplementedError`.
+
+    Attributes:
+        name: Human-readable name for the tool.
+        location: Path to the binary file or root directory.
+    """
+
+    @property
+    def is_installed(self) -> bool:
+        return self.location.exists()
+
+    @property
+    def current_version(self) -> None:  # type: ignore[override]
+        return None
+
+    @property
+    def latest_version(self) -> None:  # type: ignore[override]
+        raise NotImplementedError("LocalBinaryPackage does not support version management")
+
+    @property
+    def is_up_to_date(self) -> bool:
+        return self.is_installed
+
+    def version_exists(self, version) -> bool:  # type: ignore[override]
+        raise NotImplementedError("LocalBinaryPackage does not support version management")
+
+    def install(self, pkg_version) -> None:  # type: ignore[override]
+        raise NotImplementedError("LocalBinaryPackage does not support version management")
+
+    def uninstall(self) -> None:
+        raise NotImplementedError("LocalBinaryPackage does not support version management")
