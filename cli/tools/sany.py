@@ -316,19 +316,14 @@ class SANY(JavaClassTool):
 
         run = SANYRun(started_at=datetime.now())
 
-        # Build a local classpath for this run (do not mutate self.classpath)
-        saved_classpath = list(self.classpath)
-        try:
-            if community_modules and self.community_modules.is_installed:
-                self.classpath.append(self.community_modules.location)
-            for ext in external_modules:
-                self.classpath.append(ext)
+        extra_cp: list[Path] = []
+        if community_modules and self.community_modules.is_installed:
+            extra_cp.append(self.community_modules.location)
+        extra_cp.extend(external_modules)
 
-            # Pass just the filename; SANY is launched with cwd=module_path.parent
-            # so sibling .tla files are found automatically.
-            cmd = self.get_java_command([module_path.name])
-        finally:
-            self.classpath = saved_classpath
+        # Pass just the filename; SANY is launched with cwd=module_path.parent
+        # so sibling .tla files are found automatically.
+        cmd = self.get_java_command([module_path.name], extra_classpath=extra_cp)
         output_lines: list[str] = []
         parser = SANYOutputParser()
         display = SANYOutputDisplay(self.console, module_path.stem)

@@ -95,15 +95,7 @@ class TLCRun:
     trace: Optional[list[TLCTraceState]] = None
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert this instance to a JSON-serialisable dictionary.
-
-        Returns:
-            A plain dictionary where all values are built-in Python types
-            (``str``, ``int``, ``float``, ``bool``, ``None``, ``list``,
-            ``dict``).  :class:`~pathlib.Path` and :class:`~datetime.datetime`
-            objects are converted to strings by the caller's ``default``
-            argument when using :func:`json.dump`.
-        """
+        """Convert this instance to a JSON-serialisable dictionary."""
         return asdict(self)
 
 
@@ -141,16 +133,6 @@ class TLC(JavaClassTool):
         logger: Logger,
         console: Console,
     ) -> None:
-        """Initialise the TLC tool wrapper.
-
-        Args:
-            main_class: Fully-qualified Java main class (``"tlc2.TLC"``).
-            data_path: Directory under which per-run subdirectories are created.
-            community_modules: Package providing the CommunityModules JAR.
-            pkg: Package providing the TLA2Tools JAR.
-            logger: Logger instance for diagnostic messages.
-            console: Rich console used for all terminal output.
-        """
         super().__init__(
             name="TLC",
             classpath=pkg.location,
@@ -163,19 +145,31 @@ class TLC(JavaClassTool):
         self.community_modules = community_modules
 
     def create_run_dir(self) -> Path:
-        """Create and return a fresh timestamped directory for a TLC run.
-
-        The directory is created under :attr:`base_path` with a name of the
-        form ``tlc-run-YYYY-MM-DD-HH-MM-SS``.
-
-        Returns:
-            Path to the newly created run directory.
-        """
+        """Create and return a fresh timestamped directory for a TLC run."""
         run_dir = (
             self.base_path / f"tlc-run-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
         )
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
+
+    def _build_extra_classpath(
+        self, community_modules: bool, external_modules: list[Path]
+    ) -> list[Path]:
+        """Assemble the per-invocation classpath additions.
+
+        Args:
+            community_modules: Whether to include the CommunityModules JAR.
+            external_modules: Additional JAR files or directories.
+
+        Returns:
+            List of extra :class:`~pathlib.Path` entries to pass as
+            *extra_classpath* to :meth:`~JavaClassTool.get_java_command`.
+        """
+        extra: list[Path] = []
+        if community_modules and self.community_modules.is_installed:
+            extra.append(self.community_modules.location)
+        extra.extend(external_modules)
+        return extra
 
     def start(
         self,
@@ -207,17 +201,13 @@ class TLC(JavaClassTool):
             save_states: If ``True``, export the state space as a Graphviz
                 ``.dot`` file (``-dump dot states``).
             export_json: If ``True``, export the state space as a JSON file
-                (``-dump json states``).  Can be combined with *save_states*.
+                (``-dump json states``).
             checkpoint_dir: Directory used by TLC for metadata and checkpoints
-                (``-metadir``).  When an existing checkpoint is found TLC
-                resumes automatically.
-            checkpoint_interval: Checkpoint interval in minutes
-                (``-checkpoint N``).  Only meaningful when *checkpoint_dir* is
-                also provided.
+                (``-metadir``).
+            checkpoint_interval: Checkpoint interval in minutes (``-checkpoint N``).
             coverage_interval: Report action-coverage statistics every *N*
                 minutes (``-coverage N``).  Use ``0`` to report once at the end.
-            show_log: If ``True``, also print raw TLC output lines to the
-                console in addition to the live display.
+            show_log: If ``True``, also print raw TLC output lines to the console.
 
         Returns:
             A fully populated :class:`TLCRun` describing the run results.
@@ -225,16 +215,6 @@ class TLC(JavaClassTool):
         run_dir = self.create_run_dir()
         tlc_run = TLCRun(started_at=datetime.now())
 
-        # Configure JVM — save and restore classpath so repeated calls don't accumulate entries
-        saved_classpath = list(self.classpath)
-        self.parallel_gc = True
-        self.max_heap_size = max_heap_size
-        if community_modules:
-            self.classpath.append(self.community_modules.location)
-        if external_modules:
-            self.classpath.extend(external_modules)
-
-        # Build TLC arguments
         tlc_args = ["-workers", str(workers), "-config", str(model_path)]
 
         if save_states:
@@ -242,8 +222,7 @@ class TLC(JavaClassTool):
             tlc_args.extend(["-dump", "dot", str(tlc_run.states_file)])
 
         if export_json:
-            json_states_file = run_dir / "states.json"
-            tlc_args.extend(["-dump", "json", str(json_states_file)])
+            tlc_args.extend(["-dump", "json", str(run_dir / "states.json")])
 
         if checkpoint_dir is not None:
             checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -256,8 +235,14 @@ class TLC(JavaClassTool):
             tlc_args.extend(["-coverage", str(coverage_interval)])
 
         tlc_args.append(str(module_path))
-        cmd = self.get_java_command(tlc_args)
-        self.classpath = saved_classpath  # restore before launching
+
+        extra_cp = self._build_extra_classpath(community_modules, external_modules)
+        cmd = self.get_java_command(
+            tlc_args,
+            extra_classpath=extra_cp,
+            max_heap_size=max_heap_size,
+            parallel_gc=True,
+        )
 
         tlc_output, process, display = self._run_process(
             cmd, run_dir, module_path.stem, tlc_run, show_log
@@ -288,8 +273,7 @@ class TLC(JavaClassTool):
         """Run TLC in simulation mode and return the results.
 
         In simulation mode TLC performs random depth-first trace exploration
-        rather than exhaustive breadth-first state-space search.  It runs
-        indefinitely (or until interrupted) unless a depth limit is given.
+        rather than exhaustive breadth-first state-space search.
 
         Args:
             module_path: Path to the TLA+ module file (``.tla``).
@@ -301,42 +285,29 @@ class TLC(JavaClassTool):
             external_modules: Additional JAR files or directories to add to the
                 classpath.
             depth: Maximum depth of each simulated trace (``-depth N``).
-                When ``None`` TLC uses its built-in default (100).
             seed: Random seed for reproducible simulation (``-seed N``).
-            show_log: If ``True``, also print raw TLC output lines to the
-                console in addition to the live display.
+            show_log: If ``True``, also print raw TLC output lines to the console.
 
         Returns:
-            A :class:`TLCRun` describing the simulation results.  Note that
-            ``total_states`` and ``state_depth`` may not be populated for
-            simulation runs since TLC does not perform exhaustive search.
+            A :class:`TLCRun` describing the simulation results.
         """
         run_dir = self.create_run_dir()
         tlc_run = TLCRun(started_at=datetime.now())
 
-        # Configure JVM — save and restore classpath so repeated calls don't accumulate entries
-        saved_classpath = list(self.classpath)
-        self.parallel_gc = True
-        self.max_heap_size = max_heap_size
-        if community_modules:
-            self.classpath.append(self.community_modules.location)
-        if external_modules:
-            self.classpath.extend(external_modules)
-
-        # Build TLC arguments for simulation
-        tlc_args = [
-            "-simulate",
-            "-workers", str(workers),
-            "-config", str(model_path),
-        ]
+        tlc_args = ["-simulate", "-workers", str(workers), "-config", str(model_path)]
         if depth is not None:
             tlc_args.extend(["-depth", str(depth)])
         if seed is not None:
             tlc_args.extend(["-seed", str(seed)])
-
         tlc_args.append(str(module_path))
-        cmd = self.get_java_command(tlc_args)
-        self.classpath = saved_classpath  # restore before launching
+
+        extra_cp = self._build_extra_classpath(community_modules, external_modules)
+        cmd = self.get_java_command(
+            tlc_args,
+            extra_classpath=extra_cp,
+            max_heap_size=max_heap_size,
+            parallel_gc=True,
+        )
 
         tlc_output, process, display = self._run_process(
             cmd, run_dir, module_path.stem, tlc_run, show_log
@@ -364,10 +335,6 @@ class TLC(JavaClassTool):
         show_log: bool,
     ) -> tuple[str, subprocess.Popen, TLCOutputDisplay]:
         """Launch the TLC subprocess, stream output through the display, and wait.
-
-        The display is returned so that the caller can invoke
-        :meth:`~TLCOutputDisplay.show_summary` *after* populating all fields
-        on *tlc_run* (e.g. after calling :meth:`_parse_failure`).
 
         Args:
             cmd: Full Java command-line as a list of strings.
@@ -407,33 +374,19 @@ class TLC(JavaClassTool):
 
         tlc_run.ended_at = datetime.now()
         tlc_run.duration = tlc_run.ended_at - tlc_run.started_at
-
-        # Transfer all parsed data (including error_msg) into the run object
         parser.populate_run(tlc_run)
 
         return "".join(tlc_output_lines), process, display
 
     def _parse_success(self, tlc_run: TLCRun, output: str) -> None:
-        """Finalise a :class:`TLCRun` after a successful (exit 0) TLC run.
-
-        The parser has already populated most fields via
-        :meth:`~TLCOutputParser.populate_run`.  This method marks the run as
-        successful and fills in any fields that the parser may have missed by
-        falling back to the legacy regex patterns.
-
-        Args:
-            tlc_run: The :class:`TLCRun` to update in-place.
-            output: Full raw TLC output as a single string.
-        """
+        """Mark a :class:`TLCRun` as successful after exit code 0."""
         tlc_run.success = True
 
     def _parse_failure(self, tlc_run: TLCRun, output: str, code: int) -> None:
         """Finalise a :class:`TLCRun` after a failed TLC run.
 
-        The :class:`~TLCOutputParser` has already populated ``error_msg`` and
-        may have set ``error_kind`` for pre-processing failures.  This method
-        sets ``error_type`` from the exit code and fills in ``error_kind`` for
-        runtime violations using the exit-code mapping.
+        Sets ``error_type`` from the exit code and fills in ``error_kind`` for
+        runtime violations when the parser has not already classified the error.
 
         Exit-code-to-kind mapping:
 
@@ -441,17 +394,11 @@ class TLC(JavaClassTool):
         - ``11`` → ``"deadlock"``
         - ``12`` → ``"safety_violation"``
         - ``13`` → ``"liveness_violation"``
-        - ``1``  → ``"runtime_error"`` (when not already classified by parser)
-        - other → ``"unknown"``
-
-        Args:
-            tlc_run: The :class:`TLCRun` to update in-place.
-            output: Full raw TLC output as a single string.
-            code: Exit code returned by the TLC process.
+        - ``1``  → ``"runtime_error"``
+        - other  → ``"unknown"``
         """
         tlc_run.success = False
 
-        # Human-readable error_type from exit code
         if code in self.tlc_exit_codes:
             tlc_run.error_type = self.tlc_exit_codes[code]
         elif tlc_run.error_msg is not None:
@@ -459,8 +406,6 @@ class TLC(JavaClassTool):
         else:
             tlc_run.error_type = f"Unknown error (exit {code})"
 
-        # Set error_kind from exit code when the parser has not already classified it
-        # (parser handles config_not_found and semantic_error directly from output).
         if tlc_run.error_kind is None:
             _exit_kind: dict[int, str] = {
                 10: "assumption_violation",
@@ -471,9 +416,6 @@ class TLC(JavaClassTool):
             }
             tlc_run.error_kind = _exit_kind.get(code, "unknown")
 
-        # Only fall back to raw text splitting when the parser found nothing and
-        # the error was not already classified by the output parser (which sets
-        # error_kind for config/semantic errors without needing this heuristic).
         if (
             tlc_run.error_msg is None
             and tlc_run.error_kind not in ("config_not_found", "semantic_error")
@@ -484,15 +426,7 @@ class TLC(JavaClassTool):
     def _save_run_data(self, tlc_run: TLCRun, run_dir: Path, output: str) -> None:
         """Persist the raw TLC log and a JSON summary of the run to *run_dir*.
 
-        Two files are created:
-
-        - ``tlc.log``: the verbatim TLC output.
-        - ``run-data.json``: a JSON dump of the :class:`TLCRun` dataclass.
-
-        Args:
-            tlc_run: The :class:`TLCRun` to serialise.
-            run_dir: Directory in which the files are written.
-            output: Full raw TLC output as a single string.
+        Creates ``tlc.log`` (verbatim output) and ``run-data.json``.
         """
         tlc_run.log_file = run_dir / "tlc.log"
         with tlc_run.log_file.open("w") as f:
