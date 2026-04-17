@@ -25,7 +25,7 @@ def error_handler(func: Optional[Callable[..., Any]] = None) -> Callable[..., An
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except ToolRuntimeError:
+        except (ToolRuntimeError, click.ClickException):
             raise
         except Exception as e:
             CONSOLE.print_exception()
