@@ -17,7 +17,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from cli.models import (
+from cli.manifest import (
     Dependencies,
     Manifest,
     Model,
@@ -27,8 +27,8 @@ from cli.models import (
     Proof,
     ProofChecks,
     ProofSettings,
-    _parse_duration,
 )
+from cli.manifest.models import _parse_duration
 
 
 # ---------------------------------------------------------------------------
