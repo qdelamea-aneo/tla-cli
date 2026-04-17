@@ -1,5 +1,6 @@
 """TLC model-checking and simulation commands."""
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -51,6 +52,13 @@ def _common_tlc_options(func):
             "If not provided, it is assumed to be alongside the module file "
             "with a .cfg extension."
         ),
+    )(func)
+    func = click.option(
+        "--timeout",
+        metavar="SECONDS",
+        type=int,
+        default=None,
+        help="Kill TLC after SECONDS seconds.",
     )(func)
     return func
 
@@ -127,6 +135,7 @@ def tla_model_check(
     checkpoint_dir: Optional[Path],
     checkpoint_interval: Optional[int],
     coverage: Optional[int],
+    timeout: Optional[int],
     explain: bool,
     llm_backend: str,
 ) -> None:
@@ -158,6 +167,7 @@ def tla_model_check(
         checkpoint_dir=checkpoint_dir,
         checkpoint_interval=checkpoint_interval,
         coverage_interval=coverage,
+        timeout=timedelta(seconds=timeout) if timeout is not None else None,
     )
 
     if explain and not run.success and run.log_file and run.log_file.exists():
@@ -219,6 +229,7 @@ def tla_simulate(
     depth: Optional[int],
     seed: Optional[int],
     num_traces: Optional[int],
+    timeout: Optional[int],
     explain: bool,
     llm_backend: str,
 ) -> None:
@@ -246,6 +257,7 @@ def tla_simulate(
         depth=depth,
         seed=seed,
         num_traces=num_traces,
+        timeout=timedelta(seconds=timeout) if timeout is not None else None,
     )
 
     if explain and not run.success and run.log_file and run.log_file.exists():

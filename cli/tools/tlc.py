@@ -7,6 +7,7 @@ that stores all data produced by a single run.
 
 import json
 import subprocess
+import threading
 
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta
@@ -185,6 +186,7 @@ class TLC(JavaClassTool):
         checkpoint_dir: Optional[Path] = None,
         checkpoint_interval: Optional[int] = None,
         coverage_interval: Optional[int] = None,
+        timeout: Optional[timedelta] = None,
         show_log: bool = False,
     ) -> TLCRun:
         """Run TLC in exhaustive model-checking mode and return the results.
@@ -207,6 +209,7 @@ class TLC(JavaClassTool):
             checkpoint_interval: Checkpoint interval in minutes (``-checkpoint N``).
             coverage_interval: Report action-coverage statistics every *N*
                 minutes (``-coverage N``).  Use ``0`` to report once at the end.
+            timeout: If provided, kill TLC after this duration.
             show_log: If ``True``, also print raw TLC output lines to the console.
 
         Returns:
@@ -245,7 +248,7 @@ class TLC(JavaClassTool):
         )
 
         tlc_output, process, display = self._run_process(
-            cmd, run_dir, module_path.stem, tlc_run, show_log
+            cmd, run_dir, module_path.stem, tlc_run, show_log, timeout=timeout
         )
 
         if process.returncode == 0:
@@ -269,6 +272,7 @@ class TLC(JavaClassTool):
         depth: Optional[int] = None,
         seed: Optional[int] = None,
         num_traces: Optional[int] = None,
+        timeout: Optional[timedelta] = None,
         show_log: bool = False,
     ) -> TLCRun:
         """Run TLC in simulation mode and return the results.
@@ -315,7 +319,7 @@ class TLC(JavaClassTool):
         )
 
         tlc_output, process, display = self._run_process(
-            cmd, run_dir, module_path.stem, tlc_run, show_log
+            cmd, run_dir, module_path.stem, tlc_run, show_log, timeout=timeout
         )
 
         if process.returncode == 0:
@@ -338,6 +342,7 @@ class TLC(JavaClassTool):
         module_name: str,
         tlc_run: TLCRun,
         show_log: bool,
+        timeout: Optional[timedelta] = None,
     ) -> tuple[str, subprocess.Popen, TLCOutputDisplay]:
         """Launch the TLC subprocess, stream output through the display, and wait.
 
@@ -347,6 +352,7 @@ class TLC(JavaClassTool):
             module_name: Short module name used in the display title.
             tlc_run: :class:`TLCRun` instance to populate via the parser.
             show_log: If ``True``, each raw output line is also printed.
+            timeout: If provided, kill TLC after this duration.
 
         Returns:
             A tuple of ``(raw_output_string, completed_Popen_instance, display)``.
@@ -366,14 +372,29 @@ class TLC(JavaClassTool):
         tlc_output_lines: list[str] = []
         display = TLCOutputDisplay(self.console, module_name)
 
-        with display:
-            for line in process.stdout:
-                stripped = line.rstrip("\n")
-                parser.feed_line(stripped)
-                display.update(parser)
-                if show_log:
-                    self.console.print(stripped)
-                tlc_output_lines.append(line)
+        timer: Optional[threading.Timer] = None
+        if timeout is not None:
+            def _kill():
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+            timer = threading.Timer(timeout.total_seconds(), _kill)
+            timer.daemon = True
+            timer.start()
+
+        try:
+            with display:
+                for line in process.stdout:
+                    stripped = line.rstrip("\n")
+                    parser.feed_line(stripped)
+                    display.update(parser)
+                    if show_log:
+                        self.console.print(stripped)
+                    tlc_output_lines.append(line)
+        finally:
+            if timer is not None:
+                timer.cancel()
 
         process.wait()
 
