@@ -6,6 +6,8 @@ sequential execution of TLC model checks and TLAPS proof checks for every
 listed module.
 """
 
+import json
+
 from datetime import timedelta
 from pathlib import Path
 from typing import Optional, Union
@@ -16,7 +18,7 @@ import yaml
 from pydantic import BaseModel, DirectoryPath, Field, model_validator
 from rich.table import Table
 
-from ..constants import CONSOLE, VALID, CROSS, tlc, tlapm
+from ..constants import CONSOLE, VALID, CROSS, UNCHANGED, tlc, tlapm
 from .models import (
     ActionResult,
     Dependencies,
@@ -94,6 +96,7 @@ class Manifest(BaseModel):
         filters: Optional[list[str]] = None,
         workers_override: Optional[int] = None,
         max_heap_override: Optional[str] = None,
+        skip_passed: bool = False,
     ) -> list[ActionResult]:
         """Process all modules defined in the manifest.
 
@@ -107,10 +110,21 @@ class Manifest(BaseModel):
                 ``"MODULE_STEM/ACTION_NAME"`` (run a single action).
             workers_override: Override the worker count for every model check.
             max_heap_override: Override the JVM heap size for every model check.
+            skip_passed: When ``True``, skip any action that passed on its
+                last run (according to the ``.tla-run-cache.json`` file next
+                to the manifest).
 
         Returns:
             List of :class:`ActionResult` objects, one per action.
         """
+        cache_file = self.base_path / ".tla-run-cache.json"
+        cache: dict[str, bool] = {}
+        if skip_passed and cache_file.exists():
+            try:
+                cache = json.loads(cache_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                cache = {}
+
         results: list[ActionResult] = []
 
         CONSOLE.print()
@@ -140,16 +154,34 @@ class Manifest(BaseModel):
                     action_key = f"{module_stem}/{model.name}"
                     if not any(f in (module_stem, action_key) for f in filters):
                         continue
-                results.append(
-                    self._run_model(module, model, workers_override, max_heap_override)
-                )
+                cache_key = f"{module_stem}/{model.name}"
+                if skip_passed and cache.get(cache_key):
+                    CONSOLE.print(f"  [dim]▸ Model:[/dim] {model.name} [dim](skipped — passed previously)[/dim]")
+                    continue
+                result = self._run_model(module, model, workers_override, max_heap_override)
+                results.append(result)
+                if skip_passed:
+                    cache[cache_key] = result.overall_ok
 
             for proof in module.proofs:
                 if filters:
                     action_key = f"{module_stem}/{proof.name}"
                     if not any(f in (module_stem, action_key) for f in filters):
                         continue
-                results.append(self._run_proof(module, proof))
+                cache_key = f"{module_stem}/{proof.name}"
+                if skip_passed and cache.get(cache_key):
+                    CONSOLE.print(f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]")
+                    continue
+                result = self._run_proof(module, proof)
+                results.append(result)
+                if skip_passed:
+                    cache[cache_key] = result.overall_ok
+
+        if skip_passed:
+            try:
+                cache_file.write_text(json.dumps(cache, indent=2))
+            except OSError:
+                pass
 
         self._print_summary(results)
         return results
