@@ -67,6 +67,13 @@ def tla_proof_check(
             "tlapm is not installed.  Install it and re-run."
         )
 
+    for p in external_module:
+        if p.is_file() and p.suffix == ".jar":
+            raise click.BadArgumentUsage(
+                f"'{p.name}' is a JAR file. tlapm does not use a Java classpath; "
+                "pass a .tla file or a directory instead."
+            )
+
     # tlapm uses -I <dir> for module search paths. Resolve each entry to a
     # directory: use the path as-is when it is a directory, or its parent when
     # the user passes an individual .tla file.
