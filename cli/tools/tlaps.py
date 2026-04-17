@@ -433,6 +433,7 @@ class TLAPM(Tool):
         *,
         stretch: Optional[float] = None,
         community_modules: bool = False,
+        include_dirs: Optional[list[Path]] = None,
         timeout: Optional[timedelta] = None,
     ) -> TLAPMRun:
         """Run tlapm on *module_path* and return the results.
@@ -443,6 +444,9 @@ class TLAPM(Tool):
                 (``--stretch``).
             community_modules: If ``True``, add the CommunityModules
                 directory to tlapm's search path (``-I``).
+            include_dirs: Additional directories added to tlapm's module
+                search path (``-I``).  Pass the parent of a ``.tla`` file to
+                make that file discoverable.
             timeout: If provided, kill tlapm after this duration.
 
         Returns:
@@ -455,6 +459,8 @@ class TLAPM(Tool):
             cmd.extend(["--stretch", str(stretch)])
         if community_modules and self.community_modules_dir.exists():
             cmd.extend(["-I", str(self.community_modules_dir)])
+        for d in (include_dirs or []):
+            cmd.extend(["-I", str(d)])
         cmd.append(str(module_path))
 
         output_lines: list[str] = []

@@ -216,10 +216,15 @@ class Manifest(BaseModel):
             )
 
         try:
+            include_dirs = [
+                p if p.is_dir() else p.parent
+                for p in module.dependencies.external_modules
+            ]
             tlapm_run = tlapm.prove(
                 proof.path,
                 stretch=proof.settings.stretch,
                 community_modules=module.dependencies.community_modules,
+                include_dirs=include_dirs,
                 timeout=proof.timeout,
             )
         except Exception as exc:
