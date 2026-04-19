@@ -13,7 +13,7 @@ Tests cover:
 import pytest
 
 from datetime import datetime
-from tla_cli.tools.tlaps import (
+from tla_cli.wrappers.tlaps import (
     TLAPMObligation,
     TLAPMOutputParser,
     TLAPMRun,

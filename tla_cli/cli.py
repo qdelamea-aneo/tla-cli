@@ -53,10 +53,7 @@ def cli(ctx: click.Context) -> None:
     WORKDIR.mkdir(exist_ok=True)
 
     if ctx.invoked_subcommand is None:
-        if repl.is_available():
-            repl.start()
-        else:
-            click.echo(ctx.get_help())
+        repl.start()
 
 
 cli.add_command(tla_model_check)

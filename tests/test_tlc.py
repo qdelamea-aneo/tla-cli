@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from tla_cli.tools.tlc import TLC, TLCRun
+from tla_cli.wrappers.tlc import TLC, TLCRun
 
 
 # ---------------------------------------------------------------------------
@@ -23,15 +23,11 @@ from tla_cli.tools.tlc import TLC, TLCRun
 
 def make_tlc() -> TLC:
     """Create a :class:`TLC` instance with all dependencies mocked."""
-    mock_pkg = MagicMock()
-    mock_pkg.location = Path("/fake/tla2tools.jar")
-    mock_community = MagicMock()
-    mock_community.location = Path("/fake/community.jar")
     return TLC(
         main_class="tlc2.TLC",
         data_path=Path("/tmp"),
-        community_modules=mock_community,
-        pkg=mock_pkg,
+        tla2tools_jar=Path("/fake/tla2tools.jar"),
+        community_modules_jar=Path("/fake/community.jar"),
         logger=MagicMock(),
         console=MagicMock(),
     )

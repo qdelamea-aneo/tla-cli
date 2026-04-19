@@ -9,7 +9,7 @@ Tests cover:
 
 import pytest
 
-from tla_cli.tools.sany import SANYDiagnostic, SANYOutputParser, SANYRun
+from tla_cli.wrappers.sany import SANYDiagnostic, SANYOutputParser, SANYRun
 from datetime import datetime
 
 

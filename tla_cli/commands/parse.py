@@ -81,11 +81,6 @@ def tla_parse(
     given module file.  Exits with a non-zero status when SANY reports any
     errors.
     """
-    if not sany.is_available():
-        raise click.ClickException(
-            "tla2tools is not installed.  Run 'tla package install tla2tools'."
-        )
-
     use_json = output_format == "json"
     run = sany.parse(
         module_path,
@@ -103,7 +98,7 @@ def tla_parse(
         return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
-        from ..tools.llm import explain_sany_error
+        from ..wrappers.llm import explain_sany_error
 
         explain_sany_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend)
 

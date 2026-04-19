@@ -55,7 +55,7 @@ class CustomBuildHook(BuildHookInterface):
     PLUGIN_NAME = "custom"
 
     def initialize(self, version: str, build_data: dict) -> None:
-        tools_dir = Path("tla_cli/data/tools")
+        tools_dir = Path("tla_cli/tools")
         tools_dir.mkdir(parents=True, exist_ok=True)
 
         self._download_jars(tools_dir)

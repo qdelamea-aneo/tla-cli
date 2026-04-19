@@ -110,7 +110,9 @@ def tla_proof_check(
             )
 
     if not tlapm.is_available():
-        raise click.ClickException("tlapm is not installed.  Install it and re-run.")
+        raise click.ClickException(
+            "tlapm is not bundled with this version of tla-cli."
+        )
 
     # tlapm uses -I <dir> for module search paths. Resolve each entry to a
     # directory: use the path as-is when it is a directory, or its parent when
@@ -137,7 +139,7 @@ def tla_proof_check(
         return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
-        from ..tools.llm import explain_tlapm_error
+        from ..wrappers.llm import explain_tlapm_error
 
         explain_tlapm_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend)
 

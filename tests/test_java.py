@@ -8,7 +8,7 @@ between calls.
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from tla_cli.tools.java import JavaClassTool
+from tla_cli.wrappers.java import JavaClassTool
 
 
 # ---------------------------------------------------------------------------
@@ -22,7 +22,6 @@ def make_tool(classpath: Path = Path("/fake/tla2tools.jar")) -> JavaClassTool:
         name="TestTool",
         classpath=classpath,
         main_class="com.example.Main",
-        pkg=MagicMock(),
         logger=MagicMock(),
         console=MagicMock(),
     )

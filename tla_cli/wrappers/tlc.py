@@ -17,7 +17,6 @@ from typing import Optional, Any, Union
 
 from rich.console import Console
 
-from ..packages import Package
 from .java import JavaClassTool
 from .tlc_output import (
     TLCActionCoverage,
@@ -129,21 +128,20 @@ class TLC(JavaClassTool):
         self,
         main_class: str,
         data_path: Path,
-        community_modules: Package,
-        pkg: Package,
+        tla2tools_jar: Path,
+        community_modules_jar: Path,
         logger: Logger,
         console: Console,
     ) -> None:
         super().__init__(
             name="TLC",
-            classpath=pkg.location,
+            classpath=tla2tools_jar,
             main_class=main_class,
-            pkg=pkg,
             logger=logger,
             console=console,
         )
         self.base_path = data_path
-        self.community_modules = community_modules
+        self.community_modules_jar = community_modules_jar
 
     def create_run_dir(self) -> Path:
         """Create and return a fresh timestamped directory for a TLC run."""
@@ -167,8 +165,8 @@ class TLC(JavaClassTool):
             *extra_classpath* to :meth:`~JavaClassTool.get_java_command`.
         """
         extra: list[Path] = []
-        if community_modules and self.community_modules.is_installed:
-            extra.append(self.community_modules.location)
+        if community_modules and self.community_modules_jar.exists():
+            extra.append(self.community_modules_jar)
         extra.extend(external_modules)
         return extra
 

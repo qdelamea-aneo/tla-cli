@@ -320,7 +320,7 @@ class Manifest(BaseModel):
         if not tlapm.is_available():
             if not silent:
                 CONSOLE.print(
-                    "    [yellow]tlapm is not installed — skipping proof.[/yellow]"
+                    "    [yellow]tlapm is not bundled with this version of tla-cli — skipping proof.[/yellow]"
                 )
             return ActionResult(
                 action_type="proof",

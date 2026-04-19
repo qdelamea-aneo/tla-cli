@@ -4,7 +4,6 @@ from typing import Optional
 
 from rich.console import Console
 
-from ..packages import Package
 from .base import Tool
 
 
@@ -24,11 +23,10 @@ class JavaClassTool(Tool):
         name: str,
         classpath: Path,
         main_class: str,
-        pkg: Package,
         logger: Logger,
         console: Console,
     ) -> None:
-        super().__init__(name, pkg, logger, console)
+        super().__init__(name, logger, console)
         self.classpath = [classpath]
         self.main_class = main_class
         self.max_heap_size = "4G"

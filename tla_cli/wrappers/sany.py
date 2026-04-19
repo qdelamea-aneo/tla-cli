@@ -25,7 +25,6 @@ from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
-from ..packages import Package
 from .java import JavaClassTool
 
 
@@ -321,21 +320,20 @@ class SANY(JavaClassTool):
 
     def __init__(
         self,
-        community_modules: Package,
-        pkg: Package,
+        tla2tools_jar: Path,
+        community_modules_jar: Path,
         logger: Logger,
         console: Console,
         data_path: Optional[Path] = None,
     ) -> None:
         super().__init__(
             name="SANY",
-            classpath=pkg.location,
+            classpath=tla2tools_jar,
             main_class="tla2sany.SANY",
-            pkg=pkg,
             logger=logger,
             console=console,
         )
-        self.community_modules = community_modules
+        self.community_modules_jar = community_modules_jar
         self.data_path = data_path
 
     def parse(
@@ -365,8 +363,8 @@ class SANY(JavaClassTool):
         run = SANYRun(started_at=datetime.now())
 
         extra_cp: list[Path] = []
-        if community_modules and self.community_modules.is_installed:
-            extra_cp.append(self.community_modules.location)
+        if community_modules and self.community_modules_jar.exists():
+            extra_cp.append(self.community_modules_jar)
         extra_cp.extend(external_modules)
 
         # Pass just the filename; SANY is launched with cwd=module_path.parent

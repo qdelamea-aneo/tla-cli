@@ -2,12 +2,10 @@ import subprocess
 import sys
 
 from logging import Logger
-from typing import cast
+from pathlib import Path
 
 from rich.console import Console
-from packaging.version import Version
 
-from ..packages import Package
 from .java import JavaClassTool
 
 
@@ -17,29 +15,20 @@ class REPL(JavaClassTool):
     def __init__(
         self,
         main_class: str,
-        pkg: Package,
+        tla2tools_jar: Path,
         logger: Logger,
         console: Console,
     ) -> None:
         super().__init__(
             name="REPL",
-            classpath=pkg.location,
+            classpath=tla2tools_jar,
             main_class=main_class,
-            pkg=pkg,
             logger=logger,
             console=console,
         )
 
-    def is_available(self) -> bool:
-        if not super().is_available():
-            return False
-        version = self.pkg.current_version
-        if version is None:
-            return True
-        return cast(Version, version) >= Version("v1.8.0")
-
     def start(self) -> None:
-        """Starts the REPL if the version of TLA2Tools supports it."""
+        """Starts the TLA+ REPL."""
         try:
             process = subprocess.Popen(
                 self.get_java_command(),

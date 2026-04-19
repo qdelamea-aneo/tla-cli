@@ -40,7 +40,6 @@ from rich.progress import (
 )
 from rich.text import Text
 
-from ..packages.base import LocalBinaryPackage
 from .base import Tool
 
 
@@ -457,16 +456,19 @@ class TLAPM(Tool):
 
     def __init__(
         self,
-        pkg: LocalBinaryPackage,
+        binary_path: Path,
         community_modules_dir: Path,
         logger: Logger,
         console: Console,
         data_path: Optional[Path] = None,
     ) -> None:
-        super().__init__("tlapm", pkg, logger, console)
-        self.binary_path = pkg.location
+        super().__init__("tlapm", logger, console)
+        self.binary_path = binary_path
         self.community_modules_dir = community_modules_dir
         self.data_path = data_path
+
+    def is_available(self) -> bool:
+        return self.binary_path.exists()
 
     def prove(
         self,

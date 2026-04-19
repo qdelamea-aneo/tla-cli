@@ -209,7 +209,7 @@ def tla_model_check(
         return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
-        from ..tools.llm import explain_tlc_error
+        from ..wrappers.llm import explain_tlc_error
 
         explain_tlc_error(
             run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run
@@ -321,7 +321,7 @@ def tla_simulate(
         return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
-        from ..tools.llm import explain_tlc_error
+        from ..wrappers.llm import explain_tlc_error
 
         explain_tlc_error(
             run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run

@@ -10,7 +10,7 @@ import pytest
 
 from datetime import datetime
 
-from tla_cli.tools.tlc_output import (
+from tla_cli.wrappers.tlc_output import (
     TLCActionCoverage,
     TLCDiagnostic,
     TLCOutputParser,
@@ -19,7 +19,7 @@ from tla_cli.tools.tlc_output import (
     TLCStateVariable,
     TLCTraceState,
 )
-from tla_cli.tools.tlc import TLCRun
+from tla_cli.wrappers.tlc import TLCRun
 
 
 # ---------------------------------------------------------------------------
