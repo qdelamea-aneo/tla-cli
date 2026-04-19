@@ -32,7 +32,7 @@ dev = [
 tla = "tla_cli.cli:cli"
 
 [build-system]
-requires = ["hatchling", "uv-dynamic-versioning", "requests"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
