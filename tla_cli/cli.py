@@ -2,9 +2,6 @@ import os
 
 import rich_click as click
 
-from rich.panel import Panel
-from rich.text import Text
-
 from .commands import (
     tla_model_check,
     tla_simulate,
@@ -12,46 +9,27 @@ from .commands import (
     tla_proof_check,
     tla_run,
 )
-from .constants import CONSOLE, WORKDIR, repl
+from .constants import CONSOLE, LOGGER, WORKDIR, repl
 from .utils import AliasedGroup, error_handler
 
 
-def _show_vibecode_warning() -> None:
-    """Print a warning panel before starting the REPL.
+_BANNER = r"""
+ _____  _        _    _
+|_   _|| |      / \ _| |_
+  | |  | |     / _ \ |_|
+  | |  | |___ / ___ \
+  |_|  |_____/_/   \_\
+"""
 
-    Suppressed when ``TLA_NO_VIBECODE_WARNING`` is set to any non-empty value.
-    """
+
+def _show_vibecode_warning() -> None:
     if os.environ.get("TLA_NO_VIBECODE_WARNING"):
         return
-
-    content = Text.assemble(
-        ("⚠  This CLI is ", "bold yellow"),
-        ("vibecoded", "bold yellow underline"),
-        (" — generated mostly by an AI.\n", "bold yellow"),
-        "\n",
-        (
-            "It may contain bugs, produce incorrect output, or behave\nunexpectedly. ",
-            "",
-        ),
-        (
-            "Treat all results with appropriate scepticism\n"
-            "and verify against the raw TLC output when in doubt.",
-            "dim",
-        ),
-        "\n\n",
-        ("To suppress this warning: ", "dim"),
-        ("export TLA_NO_VIBECODE_WARNING=1", "bold cyan"),
+    LOGGER.warning(
+        "vibecoded CLI — AI-generated, may produce incorrect results. "
+        "Verify against raw tool output when in doubt. "
+        "Suppress: TLA_NO_VIBECODE_WARNING=1"
     )
-    CONSOLE.print(
-        Panel(
-            content,
-            title="[bold yellow]Experimental CLI[/bold yellow]",
-            border_style="yellow",
-            expand=False,
-            padding=(1, 2),
-        )
-    )
-    CONSOLE.print()
 
 
 @click.group(
@@ -70,11 +48,12 @@ def cli(ctx: click.Context) -> None:
     """
     Command-line tool to simplify working with TLA+.
     """
+    _show_vibecode_warning()
+    CONSOLE.print(_BANNER, style="bold blue", highlight=False)
     WORKDIR.mkdir(exist_ok=True)
 
     if ctx.invoked_subcommand is None:
         if repl.is_available():
-            _show_vibecode_warning()
             repl.start()
         else:
             click.echo(ctx.get_help())
