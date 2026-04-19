@@ -4,11 +4,14 @@ import json
 import sys
 
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import rich_click as click
 
 from ..utils import error_handler
+
+if TYPE_CHECKING:
+    from ..cli import AppContext
 
 
 @click.command(name="run")
@@ -73,8 +76,10 @@ from ..utils import error_handler
         "and suppresses all Rich panels."
     ),
 )
+@click.pass_obj
 @error_handler
 def tla_run(
+    app: "AppContext",
     manifest_path: Path,
     filters: tuple[str, ...],
     workers: Optional[int],
@@ -94,6 +99,8 @@ def tla_run(
 
     use_json = output_format == "json"
     results = Manifest.load_manifest(manifest_path).process(
+        tlc=app.tlc,
+        tlapm=app.tlapm,
         filters=list(filters) if filters else None,
         workers_override=workers,
         max_heap_override=max_heap_size,

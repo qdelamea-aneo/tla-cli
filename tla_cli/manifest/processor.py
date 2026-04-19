@@ -17,7 +17,8 @@ import yaml
 from pydantic import BaseModel, DirectoryPath, model_validator
 from rich.table import Table
 
-from ..constants import CONSOLE, VALID, CROSS, tlc, tlapm
+from ..utils import CONSOLE
+from ..wrappers import TLC, TLAPM
 from .models import (
     ActionResult,
     Model,
@@ -90,6 +91,9 @@ class Manifest(BaseModel):
 
     def process(
         self,
+        *,
+        tlc: TLC,
+        tlapm: TLAPM,
         filters: Optional[list[str]] = None,
         workers_override: Optional[int] = None,
         max_heap_override: Optional[str] = None,
@@ -162,7 +166,7 @@ class Manifest(BaseModel):
                         )
                     continue
                 result = self._run_model(
-                    module, model, workers_override, max_heap_override,
+                    module, model, tlc, workers_override, max_heap_override,
                     interactive=interactive, silent=silent,
                 )
                 results.append(result)
@@ -181,7 +185,7 @@ class Manifest(BaseModel):
                             f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]"
                         )
                     continue
-                result = self._run_proof(module, proof, interactive=interactive, silent=silent)
+                result = self._run_proof(module, proof, tlapm, interactive=interactive, silent=silent)
                 results.append(result)
                 if skip_passed:
                     cache[cache_key] = result.overall_ok
@@ -204,6 +208,7 @@ class Manifest(BaseModel):
         self,
         module: Module,
         model: Model,
+        tlc: TLC,
         workers_override: Optional[int] = None,
         max_heap_override: Optional[str] = None,
         interactive: bool = True,
@@ -311,6 +316,7 @@ class Manifest(BaseModel):
         self,
         module: Module,
         proof: Proof,
+        tlapm: TLAPM,
         interactive: bool = True,
         silent: bool = False,
     ) -> ActionResult:
@@ -407,7 +413,7 @@ class Manifest(BaseModel):
         table.add_column("Detail")
 
         for r in results:
-            icon = VALID if r.overall_ok else CROSS
+            icon = "[green]✓[/green]" if r.overall_ok else "[red]✗[/red]"
             dur = f"{r.duration.total_seconds():.1f}s" if r.duration else "—"
             detail = "" if r.detail == "ok" else r.detail
             table.add_row(r.module_name, r.name, r.action_type, icon, dur, detail)

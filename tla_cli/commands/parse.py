@@ -4,11 +4,14 @@ import json
 import sys
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import rich_click as click
 
-from ..constants import CONSOLE, sany
-from ..utils import error_handler
+from ..utils import CONSOLE, error_handler
+
+if TYPE_CHECKING:
+    from ..cli import AppContext
 
 
 @click.command(name="parse")
@@ -64,8 +67,10 @@ from ..utils import error_handler
     show_default=True,
     help="Output format: 'text' for the default Rich display, 'json' for machine-readable output.",
 )
+@click.pass_obj
 @error_handler
 def tla_parse(
+    app: "AppContext",
     module_path: Path,
     community_modules: bool,
     external_module: tuple[Path, ...],
@@ -82,7 +87,7 @@ def tla_parse(
     errors.
     """
     use_json = output_format == "json"
-    run = sany.parse(
+    run = app.sany.parse(
         module_path,
         community_modules=community_modules,
         external_modules=list(external_module),

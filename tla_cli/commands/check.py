@@ -5,12 +5,14 @@ import sys
 
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import rich_click as click
 
-from ..constants import CONSOLE, tlc
-from ..utils import error_handler
+from ..utils import CONSOLE, error_handler
+
+if TYPE_CHECKING:
+    from ..cli import AppContext
 
 
 def _common_tlc_options(func):
@@ -150,8 +152,10 @@ def _common_tlc_options(func):
     show_default=True,
     help="Output format: 'text' for the default Rich display, 'json' for machine-readable output.",
 )
+@click.pass_obj
 @error_handler
 def tla_model_check(
+    app: "AppContext",
     module_path: Path,
     model_path: Optional[Path],
     workers: int,
@@ -186,7 +190,7 @@ def tla_model_check(
 
     use_json = output_format == "json"
     model_path = model_path or module_path.with_suffix(".cfg")
-    run = tlc.start(
+    run = app.tlc.start(
         module_path,
         model_path,
         workers=workers,
@@ -268,8 +272,10 @@ def tla_model_check(
     show_default=True,
     help="Output format: 'text' for the default Rich display, 'json' for machine-readable output.",
 )
+@click.pass_obj
 @error_handler
 def tla_simulate(
+    app: "AppContext",
     module_path: Path,
     model_path: Optional[Path],
     workers: int,
@@ -300,7 +306,7 @@ def tla_simulate(
 
     use_json = output_format == "json"
     model_path = model_path or module_path.with_suffix(".cfg")
-    run = tlc.simulate(
+    run = app.tlc.simulate(
         module_path,
         model_path,
         workers=workers,

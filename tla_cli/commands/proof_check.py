@@ -5,12 +5,14 @@ import sys
 
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import rich_click as click
 
-from ..constants import CONSOLE, tlapm
-from ..utils import error_handler
+from ..utils import CONSOLE, error_handler
+
+if TYPE_CHECKING:
+    from ..cli import AppContext
 
 
 @click.command(name="proof-check")
@@ -83,8 +85,10 @@ from ..utils import error_handler
     show_default=True,
     help="Output format: 'text' for the default Rich display, 'json' for machine-readable output.",
 )
+@click.pass_obj
 @error_handler
 def tla_proof_check(
+    app: "AppContext",
     module_path: Path,
     stretch: Optional[float],
     community_modules: bool,
@@ -109,19 +113,16 @@ def tla_proof_check(
                 "pass a .tla file or a directory instead."
             )
 
-    if not tlapm.is_available():
+    if not app.tlapm.is_available():
         raise click.ClickException(
             "tlapm is not bundled with this version of tla-cli."
         )
 
-    # tlapm uses -I <dir> for module search paths. Resolve each entry to a
-    # directory: use the path as-is when it is a directory, or its parent when
-    # the user passes an individual .tla file.
     include_dirs = [p if p.is_dir() else p.parent for p in external_module]
 
     use_json = output_format == "json"
     timeout_td = timedelta(seconds=timeout) if timeout is not None else None
-    run = tlapm.prove(
+    run = app.tlapm.prove(
         module_path,
         stretch=stretch,
         community_modules=community_modules,

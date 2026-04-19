@@ -1,23 +1,50 @@
+import logging
 import rich_click as click
 
 from functools import partial, wraps
 from typing import Any, Callable, Optional
 
-from .constants import CONSOLE
-from .exceptions import ToolRuntimeError, BaseCliError
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.panel import Panel
+from rich_click import ClickException
+
+
+CONSOLE = Console()
+
+logging.basicConfig(
+    level="WARNING",
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(console=CONSOLE)],
+)
+LOGGER = logging.getLogger("rich")
+
+
+class BaseCliError(ClickException):
+    """Base exception for CLI errors."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+    def show(self, file=None):
+        CONSOLE.print(Panel(self.format_message(), title="Error", style="red"))
+
+
+class InternalCliError(BaseCliError):
+    """Error raised when an unknown internal error occurred."""
+
+    exit_code = 3
+
+
+class ToolRuntimeError(BaseCliError):
+    """Error raised when a TLA+ tool returns an error at runtime."""
+
+    exit_code = 4
 
 
 def error_handler(func: Optional[Callable[..., Any]] = None) -> Callable[..., Any]:
-    """
-    Decorator to handle errors for Click commands and ensure proper error display.
-
-    Args:
-        func: The command function to be decorated. If None, a partial function is returned,
-            allowing the decorator to be used with parentheses.
-
-    Returns:
-        The wrapped function with error handling.
-    """
+    """Decorator to handle errors for Click commands and ensure proper error display."""
     if func is None:
         return partial(error_handler)
 
@@ -35,23 +62,9 @@ def error_handler(func: Optional[Callable[..., Any]] = None) -> Callable[..., An
 
 
 class AliasedGroup(click.RichGroup):
-    """A Click Group subclass that supports command aliases.
-
-    This class extends `click.Group` to allow commands to be invoked using
-    alternative names (aliases). For example, the alias "mc" can be used
-    to invoke the "model-check" command.
-    """
+    """A Click Group subclass that supports command aliases."""
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
-        """Resolve a command by name, supporting command aliases.
-
-        Args:
-            ctx: The current Click context.
-            cmd_name: The name of the command to resolve.
-
-        Returns:
-            The resolved Click command, or None if not found.
-        """
         rv = super().get_command(ctx, cmd_name)
         if rv is not None:
             return rv
@@ -68,14 +81,5 @@ class AliasedGroup(click.RichGroup):
     def resolve_command(
         self, ctx: click.Context, args: list[str]
     ) -> tuple[str | None, click.Command | None, list[str]]:
-        """Resolve the command and arguments, ensuring the full command name is returned.
-
-        Args:
-            ctx: The current Click context.
-            args: The list of command-line arguments.
-
-        Returns:
-            A tuple of (command name, command object, remaining arguments).
-        """
         _, cmd, args = super().resolve_command(ctx, args)
         return cmd.name if cmd is not None else None, cmd, args
