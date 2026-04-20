@@ -20,14 +20,6 @@ _COMMUNITY_MODULES_JAR = _TOOLS_DIR / "CommunityModules-deps.jar"
 _TLAPM_BINARY = _TOOLS_DIR / "tlapm" / "bin" / ("tlapm.exe" if os.name == "nt" else "tlapm")
 _TLAPM_STDLIB_DIR = _TOOLS_DIR / "tlapm" / "lib" / "tlapm" / "stdlib"
 
-_BANNER = r"""
- _____  _        _    _
-|_   _|| |      / \ _| |_
-  | |  | |     / _ \ |_|
-  | |  | |___ / ___ \
-  |_|  |_____/_/   \_\
-"""
-
 
 @dataclass
 class AppContext:
@@ -65,7 +57,6 @@ def cli(ctx: click.Context) -> None:
     Command-line tool to simplify working with TLA+.
     """
     _show_vibecode_warning()
-    CONSOLE.print(_BANNER, style="bold blue", highlight=False)
 
     ctx.obj = AppContext(
         tlc=TLC(
