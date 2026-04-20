@@ -46,7 +46,7 @@ local_scheme = "no-local-version"
 packages = ["tla_cli"]
 artifacts = ["tla_cli/tools"]
 
-[tool.hatch.build.hooks.custom]
+[tool.hatch.build.targets.wheel.hooks.custom]
 path = "hatch_build.py"
 
 [tool.ruff]
