@@ -291,6 +291,7 @@ class TLCOutputParser:
         "state_header": re.compile(r"^State (?P<idx>\d+): (?P<desc>.+)$"),
         "back_edge": re.compile(r"^Back to state (?P<idx>\d+): (?P<desc>.*)$"),
         "state_var": re.compile(r"^/\\ (?P<name>[\w.]+) = (?P<value>.*)$"),
+        "state_var_bare": re.compile(r"^(?P<name>[A-Za-z_]\w*) = (?P<value>.*)$"),
     }
 
     def __init__(self) -> None:
@@ -729,15 +730,24 @@ class TLCOutputParser:
             self._current_state_vars = []
             return
 
-        # Variable line: "/\ name = value"
+        # Variable line: "/\ name = value" (multi-variable traces)
         m = self.regex["state_var"].match(stripped)
         if m:
             self._flush_current_var()
             self._current_var_name = m.group("name")
-            # Value may be empty (e.g. for records / sequences opening on next line)
             initial_value = m.group("value")
             self._current_var_value_lines = [initial_value] if initial_value else []
             return
+
+        # Bare "name = value" (single-variable traces — TLC omits the "/\ " prefix)
+        if self._current_state_idx is not None:
+            m = self.regex["state_var_bare"].match(stripped)
+            if m:
+                self._flush_current_var()
+                self._current_var_name = m.group("name")
+                initial_value = m.group("value")
+                self._current_var_value_lines = [initial_value] if initial_value else []
+                return
 
         # Continuation line for a multi-line variable value
         if self._current_var_name is not None:

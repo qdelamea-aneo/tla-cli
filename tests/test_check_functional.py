@@ -92,6 +92,41 @@ def test_model_check_json_output_on_failure_is_valid_json(runner):
 
 
 # ---------------------------------------------------------------------------
+# Single-variable error traces (bare "name = value" format)
+# ---------------------------------------------------------------------------
+
+
+def test_single_var_trace_shows_variable_in_json(runner):
+    """SafetyViolation.tla has one variable; its trace must include variable data."""
+    result = runner.invoke(
+        cli,
+        ["model-check", str(SPECS / "SafetyViolation.tla"), "--format", "json"],
+    )
+    assert result.exit_code == 1, result.output
+    data = json.loads(result.output)
+    assert data["trace"] is not None
+    assert len(data["trace"]) > 0
+    first_state = data["trace"][0]
+    assert len(first_state["variables"]) > 0, "Expected variables in first trace state, got none"
+    var_names = {v["name"] for v in first_state["variables"]}
+    assert "counter" in var_names
+
+
+def test_multi_var_trace_regression(runner):
+    """TwoPhaseCommit.tla has multiple variables; they must still appear in the trace."""
+    result = runner.invoke(
+        cli,
+        ["model-check", str(SPECS / "TwoPhaseCommit.tla"), "--format", "json"],
+    )
+    # TwoPhaseCommit has a deadlock, so it exits 1
+    assert result.exit_code == 1, result.output
+    data = json.loads(result.output)
+    assert data["trace"] is not None
+    first_state = data["trace"][0]
+    assert len(first_state["variables"]) > 1, "Expected multiple variables in 2PC trace"
+
+
+# ---------------------------------------------------------------------------
 # simulate — text mode exit codes
 # ---------------------------------------------------------------------------
 

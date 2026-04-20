@@ -549,6 +549,89 @@ def test_multiline_variable_value():
 
 
 # ---------------------------------------------------------------------------
+# Tests — single-variable traces (bare "name = value" format)
+# ---------------------------------------------------------------------------
+
+SINGLE_VAR_SAFETY = (
+    "Error: Invariant BoundedCounter is violated.\n"
+    "Error: The behavior up to this point is:\n"
+    "State 1: <Initial predicate>\n"
+    "counter = 0\n"
+    "\n"
+    "State 2: <Increment line 8, col 14 to line 8, col 30 of module SafetyViolation>\n"
+    "counter = 1\n"
+    "\n"
+    "State 3: <Increment line 8, col 14 to line 8, col 30 of module SafetyViolation>\n"
+    "counter = 2\n"
+    "\n"
+    "Finished in 0s at (2024-01-01 12:00:00)\n"
+)
+
+SINGLE_VAR_DEADLOCK = (
+    "Error: Deadlock reached.\n"
+    "Error: The behavior up to this point is:\n"
+    "State 1: <Initial predicate>\n"
+    "state = 0\n"
+    "\n"
+    "State 2: <Step line 5, col 3 to line 5, col 20 of module DeadlockSpec>\n"
+    "state = 1\n"
+    "\n"
+    "Finished in 0s at (2024-01-01 12:00:00)\n"
+)
+
+
+def test_single_var_trace_state_count():
+    run = populated_run(SINGLE_VAR_SAFETY)
+    assert run.trace is not None
+    assert len(run.trace) == 3
+
+
+def test_single_var_trace_variable_present():
+    """Each state must have exactly one variable — not an empty list."""
+    run = populated_run(SINGLE_VAR_SAFETY)
+    assert run.trace is not None
+    for state in run.trace:
+        assert len(state.variables) == 1, f"State {state.index} had {len(state.variables)} variables"
+
+
+def test_single_var_trace_variable_name():
+    run = populated_run(SINGLE_VAR_SAFETY)
+    assert run.trace is not None
+    assert run.trace[0].variables[0].name == "counter"
+
+
+def test_single_var_trace_variable_values():
+    run = populated_run(SINGLE_VAR_SAFETY)
+    assert run.trace is not None
+    values = [s.variables[0].value for s in run.trace]
+    assert values == ["0", "1", "2"]
+
+
+def test_single_var_deadlock_trace():
+    run = populated_run(SINGLE_VAR_DEADLOCK)
+    assert run.trace is not None
+    assert len(run.trace) == 2
+    assert run.trace[0].variables[0].name == "state"
+    assert run.trace[0].variables[0].value == "0"
+    assert run.trace[1].variables[0].value == "1"
+
+
+def test_bare_var_not_matched_outside_trace():
+    """The bare regex must not fire outside a trace state — e.g. a 'key = value'
+    line that appears before any State header must not be parsed as a variable."""
+    output = (
+        "TLC2 Version 2.20 of Day Month 20?? (rev: abc1234)\n"
+        "Running breadth-first search Model-Checking with fp 23 and seed 9876"
+        " with 1 worker on 8 cores with 4096MB heap and 64MB offheap memory\n"
+        "counter = 42\n"          # looks like a bare var but NOT inside a trace
+        "Model checking completed. No error has been found.\n"
+        "Finished in 0s at (2024-01-01 12:00:00)\n"
+    )
+    run = populated_run(output)
+    assert run.trace is None  # no trace started
+
+
+# ---------------------------------------------------------------------------
 # Tests — action name extraction
 # ---------------------------------------------------------------------------
 
