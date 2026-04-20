@@ -26,6 +26,7 @@ dev = [
     "mypy>=1.18.2",
     "pytest>=8.0.0",
     "ruff>=0.14.0",
+    "types-PyYAML>=6.0",
 ]
 
 [project.scripts]
@@ -47,3 +48,14 @@ artifacts = ["tla_cli/tools"]
 
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"
+
+[tool.ruff]
+exclude = ["tla_cli/tools"]
+line-length = 140
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+exclude = ["tla_cli/tools/"]
+ignore_missing_imports = true

@@ -4,13 +4,12 @@ Uses Click's CliRunner to exercise option parsing and input validation
 without launching a real tlapm process.
 """
 
-import pytest
-
-from click.testing import CliRunner
 from pathlib import Path
 
-from tla_cli.cli import cli
+import pytest
+from click.testing import CliRunner
 
+from tla_cli.cli import cli
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -101,9 +100,12 @@ def test_multiple_external_modules_first_jar_rejected(runner, tla_file, jar_file
     result = runner.invoke(
         cli,
         [
-            "proof-check", str(tla_file),
-            "--external-module", str(jar_file),
-            "--external-module", str(module_dir),
+            "proof-check",
+            str(tla_file),
+            "--external-module",
+            str(jar_file),
+            "--external-module",
+            str(module_dir),
         ],
     )
     assert result.exit_code != 0

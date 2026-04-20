@@ -1,5 +1,4 @@
 import os
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -7,14 +6,13 @@ import rich_click as click
 
 from .commands import (
     tla_model_check,
-    tla_simulate,
     tla_parse,
     tla_proof_check,
     tla_run,
+    tla_simulate,
 )
-from .utils import AliasedGroup, CONSOLE, LOGGER, error_handler
-from .wrappers import TLC, REPL, SANY, TLAPM
-
+from .utils import CONSOLE, LOGGER, AliasedGroup, error_handler
+from .wrappers import REPL, SANY, TLAPM, TLC
 
 _TOOLS_DIR = Path(__file__).parent / "tools"
 _TLA2TOOLS_JAR = _TOOLS_DIR / "tla2tools.jar"

@@ -9,12 +9,11 @@ import json
 import shutil
 import subprocess
 import threading
-
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from logging import Logger
 from pathlib import Path
-from typing import Optional, Any, Union
+from typing import Any, Optional, Union
 
 from rich.console import Console
 
@@ -142,9 +141,7 @@ class TLC(JavaClassTool):
         )
         self.community_modules_jar = community_modules_jar
 
-    def _build_extra_classpath(
-        self, community_modules: bool, external_modules: list[Path]
-    ) -> list[Path]:
+    def _build_extra_classpath(self, community_modules: bool, external_modules: list[Path]) -> list[Path]:
         """Assemble the per-invocation classpath additions.
 
         Args:
@@ -244,8 +241,14 @@ class TLC(JavaClassTool):
         )
 
         tlc_output, process, display = self._run_process(
-            cmd, run_dir, module_path.stem, tlc_run, show_log,
-            timeout=timeout, interactive=interactive, silent=silent,
+            cmd,
+            run_dir,
+            module_path.stem,
+            tlc_run,
+            show_log,
+            timeout=timeout,
+            interactive=interactive,
+            silent=silent,
         )
 
         if process.returncode == 0:
@@ -323,8 +326,14 @@ class TLC(JavaClassTool):
         )
 
         tlc_output, process, display = self._run_process(
-            cmd, run_dir, module_path.stem, tlc_run, show_log,
-            timeout=timeout, interactive=interactive, silent=silent,
+            cmd,
+            run_dir,
+            module_path.stem,
+            tlc_run,
+            show_log,
+            timeout=timeout,
+            interactive=interactive,
+            silent=silent,
         )
 
         if process.returncode == 0:
@@ -377,9 +386,7 @@ class TLC(JavaClassTool):
 
         parser = TLCOutputParser()
         tlc_output_lines: list[str] = []
-        display = TLCOutputDisplay(
-            self.console, module_name, interactive=interactive, silent=silent
-        )
+        display = TLCOutputDisplay(self.console, module_name, interactive=interactive, silent=silent)
 
         timer: Optional[threading.Timer] = None
         if timeout is not None:
@@ -453,11 +460,7 @@ class TLC(JavaClassTool):
             }
             tlc_run.error_kind = _exit_kind.get(code, "unknown")
 
-        if (
-            tlc_run.error_msg is None
-            and tlc_run.error_kind not in ("config_not_found", "semantic_error")
-            and "Error:" in output
-        ):
+        if tlc_run.error_msg is None and tlc_run.error_kind not in ("config_not_found", "semantic_error") and "Error:" in output:
             tlc_run.error_msg = output.split("Error:")[-1].strip()
 
     def _save_run_data(self, tlc_run: TLCRun, run_dir: Optional[Path], output: str) -> None:

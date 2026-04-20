@@ -10,7 +10,6 @@ from unittest.mock import MagicMock
 
 from tla_cli.wrappers.java import JavaClassTool
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

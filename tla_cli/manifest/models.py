@@ -35,13 +35,11 @@ Manifest YAML format::
 """
 
 import re
-
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional, Union, Literal
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ---------------------------------------------------------------------------
 # Duration parsing helper
@@ -64,6 +62,7 @@ def _parse_duration(v) -> Optional[timedelta]:
             h, minutes, s = int(m.group(1)), int(m.group(2)), int(m.group(3))
             return timedelta(hours=h, minutes=minutes, seconds=s)
         raise ValueError(f"Cannot parse duration: {v!r} (expected H:MM:SS)")
+    raise TypeError(f"Cannot parse duration from type {type(v).__name__}")
 
 
 # ---------------------------------------------------------------------------
@@ -274,3 +273,14 @@ class ActionResult:
     @property
     def overall_ok(self) -> bool:
         return self.success and self.checks_passed
+
+    def model_dump(self) -> dict:
+        return {
+            "action_type": self.action_type,
+            "name": self.name,
+            "module_name": self.module_name,
+            "success": self.success,
+            "checks_passed": self.checks_passed,
+            "duration": self.duration,
+            "detail": self.detail,
+        }

@@ -41,14 +41,13 @@ Error kinds produced by the parser or the exit-code mapper in :mod:`cli.tools.tl
 """
 
 import re
-
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from rich.console import Console, Group
+from rich.console import Console, ConsoleRenderable, Group, RichCast
 from rich.live import Live
 from rich.panel import Panel
 from rich.spinner import Spinner
@@ -199,9 +198,7 @@ class TLCTraceState:
 #   <Init line 10, col 3 to line 15, col 4 of module Foo>
 #   <RegisterTasks({t, u, v}) line 67, col 5 to line 70, col 31 of module Foo>
 # The `(?:[^>]*?)` skips optional action arguments before the `line` keyword.
-_ACTION_PATTERN = re.compile(
-    r"<(?P<name>\w+)(?:[^>]*?)\s+line\s+(?P<line>\d+).*?of module (?P<module>\w+)>?"
-)
+_ACTION_PATTERN = re.compile(r"<(?P<name>\w+)(?:[^>]*?)\s+line\s+(?P<line>\d+).*?of module (?P<module>\w+)>?")
 
 
 class TLCOutputParser:
@@ -248,18 +245,14 @@ class TLCOutputParser:
     """
 
     regex: dict[str, re.Pattern] = {
-        "version": re.compile(
-            r"TLC2 Version (?P<tlc_version>[\d.]+) of .+? \(rev: (?P<tlc_rev>[a-f0-9]+)\)"
-        ),
+        "version": re.compile(r"TLC2 Version (?P<tlc_version>[\d.]+) of .+? \(rev: (?P<tlc_rev>[a-f0-9]+)\)"),
         "config": re.compile(
             r"Running (?P<mode>.+?) with fp \d+ and seed (?P<seed>\d+)"
             r" with (?P<num_workers>\d+) workers? on (?P<num_cores>\d+) cores?"
             r" with (?P<heap_size>\d+)MB heap and (?P<offheap_size>\d+)MB offheap"
         ),
         "parsing": re.compile(r"^Parsing file (?P<filepath>.+\.tla)"),
-        "initial_states": re.compile(
-            r"Finished computing initial states: (?P<count>[\d,]+) distinct state"
-        ),
+        "initial_states": re.compile(r"Finished computing initial states: (?P<count>[\d,]+) distinct state"),
         "progress": re.compile(
             r"Progress\((?P<depth>\d+)\) at (?P<ts>[\d\-: ]+):\s*"
             r"(?P<total>[\d,]+) states generated"
@@ -269,26 +262,20 @@ class TLCOutputParser:
         ),
         "temporal_check": re.compile(r"Checking \d+ branches of temporal properties"),
         "temporal_done": re.compile(r"Finished checking temporal properties"),
-        "completed": re.compile(
-            r"Model checking completed\. No error has been found\."
-        ),
+        "completed": re.compile(r"Model checking completed\. No error has been found\."),
         "finished": re.compile(r"^Finished in (?P<seconds>\d+)s"),
         "state_count": re.compile(
             r"^(?P<total_states>[\d,]+) states generated,"
             r" (?P<distinct_states>[\d,]+) distinct states found,"
             r" (?P<queue>[\d,]+) states left on queue\.$"
         ),
-        "state_depth": re.compile(
-            r"The depth of the complete state graph search is (?P<state_depth>[\d,]+)"
-        ),
+        "state_depth": re.compile(r"The depth of the complete state graph search is (?P<state_depth>[\d,]+)"),
         "coverage_header": re.compile(r"^Coverage at (?P<ts>[\d\-: ]+):$"),
         "coverage_action": re.compile(
             r'<"(?P<action>[^"]+)" line (?P<line>\d+).*? of module (?P<module>\w+)>'
             r":\s*(?P<count>\d+) states generated"
         ),
-        "simulation_progress": re.compile(
-            r"Simulation: (?P<traces>\d+) traces? generated"
-        ),
+        "simulation_progress": re.compile(r"Simulation: (?P<traces>\d+) traces? generated"),
         # Error and diagnostic patterns
         "error_start": re.compile(r"^Error:\s*(?P<msg>.*)$"),
         "diagnostic_loc": re.compile(
@@ -438,9 +425,7 @@ class TLCOutputParser:
                     timestamp=self._parse_timestamp(m.group("ts")),
                     total_states=int(m.group("total").replace(",", "")),
                     distinct_states=int(m.group("distinct").replace(",", "")),
-                    states_per_minute=int(rate_str.replace(",", ""))
-                    if rate_str
-                    else None,
+                    states_per_minute=int(rate_str.replace(",", "")) if rate_str else None,
                     queue_size=int(m.group("queue").replace(",", "")),
                 )
             )
@@ -463,9 +448,7 @@ class TLCOutputParser:
         m = self.regex["state_count"].match(stripped)
         if m:
             self._final_total_states = int(m.group("total_states").replace(",", ""))
-            self._final_distinct_states = int(
-                m.group("distinct_states").replace(",", "")
-            )
+            self._final_distinct_states = int(m.group("distinct_states").replace(",", ""))
             self._final_queue_size = int(m.group("queue").replace(",", ""))
             return
 
@@ -495,10 +478,7 @@ class TLCOutputParser:
             # TLC uses "The behavior up to this point is:" for safety/deadlock
             # violations and "The following behavior constitutes a
             # counter-example:" for liveness violations.
-            if (
-                "behavior up to this point is" in first_msg
-                or "behavior constitutes a counter-example" in first_msg
-            ):
+            if "behavior up to this point is" in first_msg or "behavior constitutes a counter-example" in first_msg:
                 # Flush any previous in-block state before starting trace
                 self._flush_current_var()
                 self._flush_current_state()
@@ -650,9 +630,7 @@ class TLCOutputParser:
         if self._state_depth is not None:
             tlc_run.state_depth = self._state_depth
 
-        tlc_run.progress_history = (
-            self._progress_history if self._progress_history else None
-        )
+        tlc_run.progress_history = self._progress_history if self._progress_history else None
         tlc_run.coverage = self._coverage if self._coverage else None
         tlc_run.diagnostics = self._diagnostics if self._diagnostics else None
         tlc_run.error_kind = self._error_kind
@@ -769,18 +747,14 @@ class TLCOutputParser:
         """Commit the in-progress variable binding to the current state's variable list."""
         if self._current_var_name is not None:
             value = "\n".join(self._current_var_value_lines)
-            self._current_state_vars.append(
-                TLCStateVariable(name=self._current_var_name, value=value)
-            )
+            self._current_state_vars.append(TLCStateVariable(name=self._current_var_name, value=value))
         self._current_var_name = None
         self._current_var_value_lines = []
 
     def _flush_current_state(self) -> None:
         """Commit the in-progress trace state to the trace list."""
         if self._current_state_idx is not None:
-            action_name, location = self._parse_action_string(
-                self._current_state_action_raw or ""
-            )
+            action_name, location = self._parse_action_string(self._current_state_action_raw or "")
             self._trace_states.append(
                 TLCTraceState(
                     index=self._current_state_idx,
@@ -855,9 +829,7 @@ _PHASE_LABELS: dict[TLCPhase, str] = {
 _PREPROCESSING_ERROR_KINDS = frozenset({"config_not_found", "semantic_error"})
 
 # Error kinds that carry an error state trace.
-_TRACE_ERROR_KINDS = frozenset(
-    {"deadlock", "safety_violation", "liveness_violation", "assumption_violation"}
-)
+_TRACE_ERROR_KINDS = frozenset({"deadlock", "safety_violation", "liveness_violation", "assumption_violation"})
 
 
 class TLCOutputDisplay:
@@ -955,9 +927,7 @@ class TLCOutputDisplay:
             if phase != self._last_phase:
                 self._last_phase = phase
                 label = _PHASE_LABELS.get(phase, phase.value)
-                self._console.print(
-                    f"[dim]{self._module_name}[/dim] · {label}"
-                )
+                self._console.print(f"[dim]{self._module_name}[/dim] · {label}")
             elif progress is not None and progress.depth != self._last_depth:
                 self._last_depth = progress.depth
                 self._console.print(
@@ -1001,14 +971,10 @@ class TLCOutputDisplay:
         title_color = "green" if success else "red"
         status_icon = "[green]✓[/green]" if success else "[red]✗[/red]"
 
-        content_parts: list[object] = []
+        content_parts: list[ConsoleRenderable | RichCast | str] = []
 
         if success:
-            content_parts.append(
-                Text.from_markup(
-                    f"{status_icon} Model checking completed. No error has been found."
-                )
-            )
+            content_parts.append(Text.from_markup(f"{status_icon} Model checking completed. No error has been found."))
         else:
             content_parts.extend(self._render_error(tlc_run, status_icon))
 
@@ -1024,9 +990,7 @@ class TLCOutputDisplay:
         # Coverage table (on success with --coverage, or when collected on failure)
         if tlc_run.coverage:
             content_parts.append(Text(""))
-            cov_table = Table(
-                title="Action Coverage", show_header=True, header_style="bold"
-            )
+            cov_table = Table(title="Action Coverage", show_header=True, header_style="bold")
             cov_table.add_column("Action", style="cyan")
             cov_table.add_column("Module", style="dim")
             cov_table.add_column("Line", justify="right", style="dim")
@@ -1043,11 +1007,7 @@ class TLCOutputDisplay:
         # Log file footer
         if run_dir is not None:
             content_parts.append(Text(""))
-            content_parts.append(
-                Text.from_markup(
-                    f"[dim]See the full TLC logs here:[/dim] {run_dir / 'tlc.log'}"
-                )
-            )
+            content_parts.append(Text.from_markup(f"[dim]See the full TLC logs here:[/dim] {run_dir / 'tlc.log'}"))
 
         title = f"[bold {title_color}]TLC — {self._module_name}[/bold {title_color}]"
         self._console.print(Panel(Group(*content_parts), title=title, expand=False))
@@ -1056,7 +1016,7 @@ class TLCOutputDisplay:
     # Internal rendering helpers
     # ------------------------------------------------------------------
 
-    def _render_error(self, tlc_run: "TLCRun", status_icon: str) -> list[object]:
+    def _render_error(self, tlc_run: "TLCRun", status_icon: str) -> list[ConsoleRenderable | RichCast | str]:
         """Build the error section of the summary panel.
 
         Returns a list of Rich renderables to be included in the panel's
@@ -1066,50 +1026,27 @@ class TLCOutputDisplay:
             tlc_run: Populated :class:`~cli.tools.tlc.TLCRun` instance.
             status_icon: Pre-formatted Rich markup icon string (``✗`` in red).
         """
-        parts: list[object] = []
+        parts: list[ConsoleRenderable | RichCast | str] = []
         error_kind = tlc_run.error_kind or "unknown"
         error_type = tlc_run.error_type or "Error"
 
         if error_kind == "config_not_found":
-            parts.append(
-                Text.from_markup(
-                    f"{status_icon} [red]Configuration file not found[/red]"
-                )
-            )
+            parts.append(Text.from_markup(f"{status_icon} [red]Configuration file not found[/red]"))
             if tlc_run.error_msg:
                 parts.append(Text(""))
-                parts.append(
-                    Text.from_markup(f"  [dim]Path:[/dim] {tlc_run.error_msg}")
-                )
-            parts.append(
-                Text.from_markup(
-                    "  [dim]Hint:[/dim] Create the .cfg file or pass --model-path."
-                )
-            )
+                parts.append(Text.from_markup(f"  [dim]Path:[/dim] {tlc_run.error_msg}"))
+            parts.append(Text.from_markup("  [dim]Hint:[/dim] Create the .cfg file or pass --model-path."))
 
         elif error_kind == "semantic_error":
             if tlc_run.diagnostics:
                 n = len(tlc_run.diagnostics)
                 noun = "issue" if n == 1 else "issues"
-                parts.append(
-                    Text.from_markup(
-                        f"{status_icon} [red]Semantic {'error' if n == 1 else 'errors'}"
-                        f" — {n} {noun}[/red]"
-                    )
-                )
+                parts.append(Text.from_markup(f"{status_icon} [red]Semantic {'error' if n == 1 else 'errors'} — {n} {noun}[/red]"))
                 parts.append(Text(""))
                 parts.append(self._build_diagnostics_table(tlc_run.diagnostics))
             else:
-                parts.append(
-                    Text.from_markup(
-                        f"{status_icon} [red]Parsing or semantic analysis failed[/red]"
-                    )
-                )
-                parts.append(
-                    Text.from_markup(
-                        "  [dim]Hint:[/dim] See the log file below for detailed error messages."
-                    )
-                )
+                parts.append(Text.from_markup(f"{status_icon} [red]Parsing or semantic analysis failed[/red]"))
+                parts.append(Text.from_markup("  [dim]Hint:[/dim] See the log file below for detailed error messages."))
 
         elif error_kind in _TRACE_ERROR_KINDS:
             parts.append(Text.from_markup(f"{status_icon} [red]{error_type}[/red]"))
@@ -1147,9 +1084,7 @@ class TLCOutputDisplay:
         if tlc_run.total_states is not None:
             stats_table.add_row("States generated:", f"{tlc_run.total_states:,}")
         if tlc_run.total_distinct_states is not None:
-            stats_table.add_row(
-                "Distinct states:", f"{tlc_run.total_distinct_states:,}"
-            )
+            stats_table.add_row("Distinct states:", f"{tlc_run.total_distinct_states:,}")
         if tlc_run.num_states_queued is not None:
             stats_table.add_row("States in queue:", f"{tlc_run.num_states_queued:,}")
         if tlc_run.state_depth is not None:
@@ -1174,9 +1109,7 @@ class TLCOutputDisplay:
         Returns:
             A :class:`~rich.table.Table` ready to include in a panel.
         """
-        table = Table(
-            show_header=True, header_style="bold", show_lines=True, expand=False
-        )
+        table = Table(show_header=True, header_style="bold", show_lines=True, expand=False)
         table.add_column("Module", style="cyan", no_wrap=True)
         table.add_column("Location", style="dim", no_wrap=True)
         table.add_column("Message")
@@ -1245,15 +1178,9 @@ class TLCOutputDisplay:
         label = _PHASE_LABELS.get(phase, phase.value)
 
         if progress is not None:
-            spinner_text = (
-                f"{label} — depth {progress.depth},"
-                f" {progress.total_states:,} states,"
-                f" {progress.distinct_states:,} distinct"
-            )
+            spinner_text = f"{label} — depth {progress.depth}, {progress.total_states:,} states, {progress.distinct_states:,} distinct"
         else:
             spinner_text = label
 
-        spinner = Spinner(
-            "dots", text=f"[bold]{self._module_name}[/bold] · {spinner_text}"
-        )
+        spinner = Spinner("dots", text=f"[bold]{self._module_name}[/bold] · {spinner_text}")
         return Group(spinner)

@@ -7,15 +7,12 @@ Contracts under test:
   TLAPM_CACHE_DIR env var is set; --nofp / --cleanfp flags are forwarded.
 """
 
-import pytest
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from tla_cli.wrappers.sany import SANY
 from tla_cli.wrappers.tlaps import TLAPM
 from tla_cli.wrappers.tlc import TLC
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,10 +69,14 @@ def test_tlc_start_creates_cache_dir(tmp_path):
 
     with patch("subprocess.Popen", return_value=_mock_popen()):
         make_tlc().start(
-            spec, cfg,
-            workers=1, max_heap_size="1G",
-            community_modules=False, external_modules=[],
-            interactive=False, silent=True,
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            interactive=False,
+            silent=True,
             cache_dir=cache_dir,
         )
 
@@ -91,10 +92,14 @@ def test_tlc_start_writes_log_and_json(tmp_path):
 
     with patch("subprocess.Popen", return_value=_mock_popen(lines=["output line\n"])):
         run = make_tlc().start(
-            spec, cfg,
-            workers=1, max_heap_size="1G",
-            community_modules=False, external_modules=[],
-            interactive=False, silent=True,
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            interactive=False,
+            silent=True,
             cache_dir=cache_dir,
         )
 
@@ -116,10 +121,14 @@ def test_tlc_start_wipes_existing_cache_dir(tmp_path):
 
     with patch("subprocess.Popen", return_value=_mock_popen()):
         make_tlc().start(
-            spec, cfg,
-            workers=1, max_heap_size="1G",
-            community_modules=False, external_modules=[],
-            interactive=False, silent=True,
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            interactive=False,
+            silent=True,
             cache_dir=cache_dir,
         )
 
@@ -134,10 +143,14 @@ def test_tlc_start_no_cache_dir_no_log(tmp_path):
 
     with patch("subprocess.Popen", return_value=_mock_popen()):
         run = make_tlc().start(
-            spec, cfg,
-            workers=1, max_heap_size="1G",
-            community_modules=False, external_modules=[],
-            interactive=False, silent=True,
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            interactive=False,
+            silent=True,
         )
 
     assert run.log_file is None

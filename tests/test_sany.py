@@ -7,11 +7,9 @@ Tests cover:
 - SANYDiagnostic fields
 """
 
-import pytest
-
-from tla_cli.wrappers.sany import SANYDiagnostic, SANYOutputParser, SANYRun
 from datetime import datetime
 
+from tla_cli.wrappers.sany import SANYDiagnostic, SANYOutputParser, SANYRun
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,10 +38,12 @@ def test_parsing_file_single():
 
 
 def test_parsing_file_multiple():
-    p = _run_parser([
-        "Parsing file /path/to/Spec.tla",
-        "Parsing file /path/to/Other.tla (jar:file:/foo.jar!/Other.tla)",
-    ])
+    p = _run_parser(
+        [
+            "Parsing file /path/to/Spec.tla",
+            "Parsing file /path/to/Other.tla (jar:file:/foo.jar!/Other.tla)",
+        ]
+    )
     assert len(p.get_modules_parsed()) == 2
 
 

@@ -32,7 +32,6 @@ from pathlib import Path
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
-
 # ── Wheel platform tags per (system, machine) ─────────────────────────────────
 # Use the minimum macOS deployment target that matches TLAPM CI builds.
 PLATFORM_TAGS: dict[tuple[str, str], str] = {
@@ -44,11 +43,7 @@ PLATFORM_TAGS: dict[tuple[str, str], str] = {
 def _require_env(name: str) -> str:
     val = os.environ.get(name)
     if not val:
-        raise RuntimeError(
-            f"Required environment variable {name!r} is not set. "
-            "Set it before building, e.g.:\n"
-            f"  {name}=<version> uv build"
-        )
+        raise RuntimeError(f"Required environment variable {name!r} is not set. Set it before building, e.g.:\n  {name}=<version> uv build")
     return val
 
 
@@ -104,8 +99,7 @@ class CustomBuildHook(BuildHookInterface):
         if not tla2tools.exists():
             version = _require_env("TLA2TOOLS_VERSION")
             self._fetch(
-                f"https://github.com/tlaplus/tlaplus/releases/download"
-                f"/v{version}/tla2tools.jar",
+                f"https://github.com/tlaplus/tlaplus/releases/download/v{version}/tla2tools.jar",
                 tla2tools,
             )
 
@@ -113,15 +107,14 @@ class CustomBuildHook(BuildHookInterface):
         if not cm_jar.exists():
             version = _require_env("COMMUNITY_MODULES_VERSION")
             self._fetch(
-                f"https://github.com/tlaplus/CommunityModules/releases/download"
-                f"/{version}/CommunityModules-deps.jar",
+                f"https://github.com/tlaplus/CommunityModules/releases/download/{version}/CommunityModules-deps.jar",
                 cm_jar,
             )
 
         # Extract .tla source files so tlapm can use them (it cannot read JARs)
         cm_tla_dir = tools_dir / "community-modules"
         if not cm_tla_dir.exists():
-            print(f"  Extracting .tla files from CommunityModules-deps.jar…", flush=True)
+            print("  Extracting .tla files from CommunityModules-deps.jar…", flush=True)
             cm_tla_dir.mkdir()
             with zipfile.ZipFile(cm_jar) as zf:
                 tla_entries = [n for n in zf.namelist() if n.endswith(".tla")]
@@ -129,9 +122,7 @@ class CustomBuildHook(BuildHookInterface):
                     (cm_tla_dir / Path(entry).name).write_bytes(zf.read(entry))
             print(f"  Extracted {len(tla_entries)} .tla file(s) to {cm_tla_dir}.")
 
-    def _find_tlapm_asset(
-        self, assets: list[dict], system: str, machine: str
-    ) -> dict | None:
+    def _find_tlapm_asset(self, assets: list[dict], system: str, machine: str) -> dict | None:
         sys_lower = system.lower()
         mach_lower = machine.lower()
         for asset in assets:
@@ -163,15 +154,10 @@ class CustomBuildHook(BuildHookInterface):
         if not tlapm_bin.exists() or not tlapm_isabelle.exists():
             tlapm_version = _require_env("TLAPM_VERSION")
             print(f"  Fetching TLAPM {tlapm_version} release info from GitHub…", flush=True)
-            release = self._github_api(
-                f"https://api.github.com/repos/tlaplus/tlapm/releases/tags/{tlapm_version}"
-            )
+            release = self._github_api(f"https://api.github.com/repos/tlaplus/tlapm/releases/tags/{tlapm_version}")
             asset = self._find_tlapm_asset(release.get("assets", []), system, machine)
             if asset is None:
-                print(
-                    f"  No TLAPM binary for {system}/{machine} in release {tlapm_version};"
-                    " building universal wheel (JARs only)."
-                )
+                print(f"  No TLAPM binary for {system}/{machine} in release {tlapm_version}; building universal wheel (JARs only).")
                 return
 
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -198,9 +184,7 @@ class CustomBuildHook(BuildHookInterface):
                 # bin/tlapm  (skip tlapm_lsp and translate to keep the bundle small)
                 (tlapm_dir / "bin").mkdir(parents=True)
                 shutil.copy2(src_bin, tlapm_bin)
-                tlapm_bin.chmod(
-                    tlapm_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-                )
+                tlapm_bin.chmod(tlapm_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
                 # lib/tlapm/ — full backend suite including Isabelle
                 src_lib = src_root / "lib" / "tlapm"
@@ -217,7 +201,4 @@ class CustomBuildHook(BuildHookInterface):
             build_data["tag"] = f"py3-none-{tag}"
             print(f"  Bundling TLAPM; wheel tagged as {build_data['tag']}.")
         else:
-            print(
-                f"  TLAPM bundled but no wheel tag defined for {system}/{machine};"
-                " building universal wheel."
-            )
+            print(f"  TLAPM bundled but no wheel tag defined for {system}/{machine}; building universal wheel.")

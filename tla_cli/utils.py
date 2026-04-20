@@ -1,14 +1,12 @@
 import logging
-import rich_click as click
-
 from functools import partial, wraps
 from typing import Any, Callable, Optional
 
+import rich_click as click
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.panel import Panel
 from rich_click import ClickException
-
 
 CONSOLE = Console()
 
@@ -78,8 +76,6 @@ class AliasedGroup(click.RichGroup):
             return click.Group.get_command(self, ctx, aliases[cmd_name])
         return None
 
-    def resolve_command(
-        self, ctx: click.Context, args: list[str]
-    ) -> tuple[str | None, click.Command | None, list[str]]:
+    def resolve_command(self, ctx: click.Context, args: list[str]) -> tuple[str | None, click.Command | None, list[str]]:
         _, cmd, args = super().resolve_command(ctx, args)
         return cmd.name if cmd is not None else None, cmd, args

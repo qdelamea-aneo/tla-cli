@@ -7,14 +7,13 @@ output parser and the failure handler.
 No real TLC process is launched — all subprocess calls are mocked.
 """
 
-import pytest
-
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from tla_cli.wrappers.tlc import TLC, TLCRun
+import pytest
 
+from tla_cli.wrappers.tlc import TLC, TLCRun
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -49,7 +48,7 @@ def fresh_run() -> TLCRun:
         (11, "deadlock", "Deadlock failure"),
         (12, "safety_violation", "Safety failure"),
         (13, "liveness_violation", "Liveness failure"),
-        (1,  "runtime_error", "Error"),
+        (1, "runtime_error", "Error"),
         (99, "unknown", "Unknown error (exit 99)"),
     ],
 )
@@ -79,7 +78,7 @@ def test_parse_failure_preserves_config_not_found():
     _parse_failure must not overwrite it with the exit-code kind."""
     tlc = make_tlc()
     run = fresh_run()
-    run.error_kind = "config_not_found"   # set by parser
+    run.error_kind = "config_not_found"  # set by parser
     tlc._parse_failure(run, "", 255)
     assert run.error_kind == "config_not_found"
 
@@ -88,7 +87,7 @@ def test_parse_failure_preserves_semantic_error():
     """Parser-set semantic_error must survive _parse_failure."""
     tlc = make_tlc()
     run = fresh_run()
-    run.error_kind = "semantic_error"    # set by parser
+    run.error_kind = "semantic_error"  # set by parser
     tlc._parse_failure(run, "", 1)
     assert run.error_kind == "semantic_error"
 
@@ -112,9 +111,9 @@ def test_parse_failure_no_fallback_for_config_error():
     tlc = make_tlc()
     run = fresh_run()
     run.error_kind = "config_not_found"
-    run.error_msg = "/path/to/Foo.cfg"   # already set by parser
+    run.error_msg = "/path/to/Foo.cfg"  # already set by parser
     tlc._parse_failure(run, "Error: Failed to open the configuration file", 255)
-    assert run.error_msg == "/path/to/Foo.cfg"   # unchanged
+    assert run.error_msg == "/path/to/Foo.cfg"  # unchanged
 
 
 def test_parse_failure_no_fallback_for_semantic_error():

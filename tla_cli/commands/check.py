@@ -2,7 +2,6 @@
 
 import json
 import sys
-
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -106,10 +105,7 @@ def _common_tlc_options(func):
     metavar="DIR",
     type=click.Path(dir_okay=True, file_okay=False, resolve_path=True, path_type=Path),
     default=None,
-    help=(
-        "Directory for TLC metadata and checkpoints (-metadir). "
-        "When an existing checkpoint is present TLC resumes automatically."
-    ),
+    help=("Directory for TLC metadata and checkpoints (-metadir). When an existing checkpoint is present TLC resumes automatically."),
 )
 @click.option(
     "--checkpoint-interval",
@@ -123,10 +119,7 @@ def _common_tlc_options(func):
     metavar="MINUTES",
     type=int,
     default=None,
-    help=(
-        "Report action and property coverage statistics every MINUTES minutes "
-        "(use 0 to report once at the end of the run)."
-    ),
+    help=("Report action and property coverage statistics every MINUTES minutes (use 0 to report once at the end of the run)."),
 )
 @click.option(
     "--explain",
@@ -181,9 +174,7 @@ def tla_model_check(
     """
     for ext_module in external_module:
         if ext_module.is_file() and ext_module.suffix != ".jar":
-            raise click.BadArgumentUsage(
-                f"External module '{ext_module}' must be a .jar file."
-            )
+            raise click.BadArgumentUsage(f"External module '{ext_module}' must be a .jar file.")
 
     if checkpoint_interval is not None and checkpoint_dir is None:
         raise click.UsageError("--checkpoint-interval requires --checkpoint-dir.")
@@ -218,9 +209,7 @@ def tla_model_check(
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..wrappers.llm import explain_tlc_error
 
-        explain_tlc_error(
-            run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run
-        )
+        explain_tlc_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run)
 
 
 @click.command(name="simulate")
@@ -303,9 +292,7 @@ def tla_simulate(
     """
     for ext_module in external_module:
         if ext_module.is_file() and ext_module.suffix != ".jar":
-            raise click.BadArgumentUsage(
-                f"External module '{ext_module}' must be a .jar file."
-            )
+            raise click.BadArgumentUsage(f"External module '{ext_module}' must be a .jar file.")
 
     use_json = output_format == "json"
     model_path = model_path or module_path.with_suffix(".cfg")
@@ -335,6 +322,4 @@ def tla_simulate(
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..wrappers.llm import explain_tlc_error
 
-        explain_tlc_error(
-            run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run
-        )
+        explain_tlc_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run)

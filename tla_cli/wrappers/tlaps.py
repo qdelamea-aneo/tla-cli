@@ -22,7 +22,6 @@ import os
 import re
 import subprocess
 import threading
-
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from logging import Logger
@@ -36,13 +35,13 @@ from rich.progress import (
     BarColumn,
     Progress,
     SpinnerColumn,
+    TaskID,
     TextColumn,
     TimeElapsedColumn,
 )
 from rich.text import Text
 
 from .base import Tool
-
 
 # ---------------------------------------------------------------------------
 # Obligation statuses
@@ -124,9 +123,7 @@ class TLAPMRun:
 
     @property
     def num_proved(self) -> int:
-        return sum(
-            1 for o in self.obligations.values() if o.status in _SUCCESS_STATUSES
-        )
+        return sum(1 for o in self.obligations.values() if o.status in _SUCCESS_STATUSES)
 
     @property
     def num_failed(self) -> int:
@@ -134,9 +131,7 @@ class TLAPMRun:
 
     @property
     def num_pending(self) -> int:
-        return sum(
-            1 for o in self.obligations.values() if o.status not in _FINAL_STATUSES
-        )
+        return sum(1 for o in self.obligations.values() if o.status not in _FINAL_STATUSES)
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +318,7 @@ class TLAPMOutputDisplay:
         self._silent = silent
         self._progress: Optional[Progress] = None
         self._live: Optional[Live] = None
-        self._task_id = None
+        self._task_id: Optional[TaskID] = None
         self._last_proved: int = -1  # plain-mode state
 
     def __enter__(self) -> "TLAPMOutputDisplay":
@@ -337,9 +332,7 @@ class TLAPMOutputDisplay:
                 console=self._console,
                 transient=False,
             )
-            self._task_id = self._progress.add_task(
-                f"Proving {self._module_name}…", total=None
-            )
+            self._task_id = self._progress.add_task(f"Proving {self._module_name}…", total=None)
             self._live = Live(
                 self._progress,
                 console=self._console,
@@ -365,9 +358,7 @@ class TLAPMOutputDisplay:
         total = parser.get_num_obligations() or len(obligations)
         proved = sum(1 for o in obligations.values() if o.status in _SUCCESS_STATUSES)
         failed = sum(1 for o in obligations.values() if o.status == FAILED)
-        pending = sum(
-            1 for o in obligations.values() if o.status not in _FINAL_STATUSES
-        )
+        pending = sum(1 for o in obligations.values() if o.status not in _FINAL_STATUSES)
 
         if self._interactive:
             if self._progress is None or self._task_id is None:
@@ -379,18 +370,13 @@ class TLAPMOutputDisplay:
             if pending:
                 parts.append(f"{pending} in progress")
             description = " · ".join(parts)
-            self._progress.update(
-                self._task_id, description=description, total=total, completed=proved
-            )
+            self._progress.update(self._task_id, description=description, total=total, completed=proved)
         else:
             # Plain mode: print a line each time a new obligation is proved.
             if proved > self._last_proved:
                 self._last_proved = proved
                 failed_part = f", {failed} failed" if failed else ""
-                self._console.print(
-                    f"[dim]{self._module_name}[/dim] · "
-                    f"{proved}/{total} proved{failed_part}"
-                )
+                self._console.print(f"[dim]{self._module_name}[/dim] · {proved}/{total} proved{failed_part}")
 
     def show_summary(self, run: TLAPMRun) -> None:
         """Print the final summary panel after the live display has closed.
@@ -521,9 +507,7 @@ class TLAPM(Tool):
 
         output_lines: list[str] = []
         parser = TLAPMOutputParser()
-        display = TLAPMOutputDisplay(
-            self.console, module_path.stem, interactive=interactive, silent=silent
-        )
+        display = TLAPMOutputDisplay(self.console, module_path.stem, interactive=interactive, silent=silent)
 
         process = subprocess.Popen(
             cmd,

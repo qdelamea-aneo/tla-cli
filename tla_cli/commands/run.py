@@ -2,7 +2,6 @@
 
 import json
 import sys
-
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -51,30 +50,22 @@ if TYPE_CHECKING:
     "--skip-passed",
     is_flag=True,
     default=False,
-    help=(
-        "Skip actions that passed on their last run.  Pass/fail state is "
-        "cached in .tla-run-cache.json next to the manifest file."
-    ),
+    help=("Skip actions that passed on their last run.  Pass/fail state is cached in .tla-run-cache.json next to the manifest file."),
 )
 @click.option(
     "--no-progress",
     "no_progress",
     is_flag=True,
     default=False,
-    help=(
-        "Disable the interactive live displays inside each tool run.  "
-        "Progress updates are printed as plain lines instead."
-    ),
+    help=("Disable the interactive live displays inside each tool run.  Progress updates are printed as plain lines instead."),
 )
 @click.option(
-    "--format", "output_format",
+    "--format",
+    "output_format",
     type=click.Choice(["text", "json"], case_sensitive=False),
     default="text",
     show_default=True,
-    help=(
-        "Output format.  'json' emits a JSON array of action results to stdout "
-        "and suppresses all Rich panels."
-    ),
+    help=("Output format.  'json' emits a JSON array of action results to stdout and suppresses all Rich panels."),
 )
 @click.pass_obj
 @error_handler

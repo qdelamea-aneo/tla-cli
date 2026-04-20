@@ -1,6 +1,5 @@
 import subprocess
 import sys
-
 from logging import Logger
 from pathlib import Path
 
@@ -40,8 +39,6 @@ class REPL(JavaClassTool):
             )
             process.wait()
             if process.returncode != 0:
-                raise RuntimeError(
-                    process.stderr.read() if process.stderr else "REPL failed."
-                )
+                raise RuntimeError(process.stderr.read() if process.stderr else "REPL failed.")
         except KeyboardInterrupt:
             pass

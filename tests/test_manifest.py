@@ -10,11 +10,10 @@ Tests cover:
 - Path resolution via model_validator
 """
 
-import pytest
-
 from datetime import timedelta
 from pathlib import Path
 
+import pytest
 from pydantic import ValidationError
 
 from tla_cli.manifest import (
@@ -29,7 +28,6 @@ from tla_cli.manifest import (
     ProofSettings,
 )
 from tla_cli.manifest.models import _parse_duration
-
 
 # ---------------------------------------------------------------------------
 # Duration parsing

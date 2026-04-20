@@ -2,7 +2,6 @@
 
 import json
 import sys
-
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,9 +27,7 @@ if TYPE_CHECKING:
 @click.option(
     "--external-module",
     metavar="MODULE_PATH",
-    type=click.Path(
-        exists=True, dir_okay=True, file_okay=True, resolve_path=True, path_type=Path
-    ),
+    type=click.Path(exists=True, dir_okay=True, file_okay=True, resolve_path=True, path_type=Path),
     multiple=True,
     help="Additional external TLA+ modules or JAR files to include in the classpath.",
 )
@@ -39,10 +36,7 @@ if TYPE_CHECKING:
     "no_progress",
     is_flag=True,
     default=False,
-    help=(
-        "Disable the interactive live display.  Each progress update is "
-        "printed as a plain line instead."
-    ),
+    help=("Disable the interactive live display.  Each progress update is printed as a plain line instead."),
 )
 @click.option(
     "--explain",
@@ -61,7 +55,8 @@ if TYPE_CHECKING:
     help="LLM backend to use with --explain.",
 )
 @click.option(
-    "--format", "output_format",
+    "--format",
+    "output_format",
     type=click.Choice(["text", "json"], case_sensitive=False),
     default="text",
     show_default=True,

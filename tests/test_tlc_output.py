@@ -6,21 +6,13 @@ output strings that mirror real TLC log output are fed to
 resulting parser state is verified.
 """
 
-import pytest
-
 from datetime import datetime
 
+from tla_cli.wrappers.tlc import TLCRun
 from tla_cli.wrappers.tlc_output import (
-    TLCActionCoverage,
-    TLCDiagnostic,
     TLCOutputParser,
     TLCPhase,
-    TLCProgress,
-    TLCStateVariable,
-    TLCTraceState,
 )
-from tla_cli.wrappers.tlc import TLCRun
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -54,11 +46,7 @@ Parsing file /specs/Foo.tla
 Parsing file /specs/Bar.tla
 """
 
-PROGRESS_LINE = (
-    "Progress(5) at 2024-01-01 12:00:01: "
-    "100 states generated (50 s/min), 42 distinct states found, "
-    "10 states left on queue."
-)
+PROGRESS_LINE = "Progress(5) at 2024-01-01 12:00:01: 100 states generated (50 s/min), 42 distinct states found, 10 states left on queue."
 
 SUCCESS_TAIL = """\
 Model checking completed. No error has been found.
@@ -282,10 +270,7 @@ def test_progress_snapshot():
 
 
 def test_progress_history_accumulates():
-    line2 = (
-        "Progress(6) at 2024-01-01 12:00:02: "
-        "200 states generated, 80 distinct states found, 5 states left on queue."
-    )
+    line2 = "Progress(6) at 2024-01-01 12:00:02: 200 states generated, 80 distinct states found, 5 states left on queue."
     p = parse(HEADER + PROGRESS_LINE + "\n" + line2)
     assert len(p._progress_history) == 2
     assert p._progress_history[1].depth == 6
@@ -391,7 +376,9 @@ def test_semantic_error_second_diagnostic():
 def test_semantic_error_diagnostics_deduplicated():
     """Repeated identical diagnostics (TLC reports them once per dependent module)
     should appear only once in the list."""
-    doubled = SEMANTIC_ERROR_WITH_DIAGS + """\
+    doubled = (
+        SEMANTIC_ERROR_WITH_DIAGS
+        + """\
 line 15, col 5 to line 15, col 12 of module Foo
 
 Unknown operator: Baad
@@ -399,6 +386,7 @@ Unknown operator: Baad
 Error: Parsing or semantic analysis failed.
 Finished in 0s at (2024-01-01 12:00:00)
 """
+    )
     run = populated_run(doubled)
     assert run.diagnostics is not None
     assert len(run.diagnostics) == 2  # still 2, not 3

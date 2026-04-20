@@ -23,7 +23,6 @@ Supported backends
 """
 
 import os
-
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Iterator, Optional
 
@@ -170,9 +169,7 @@ class ClaudeBackend(LLMBackend):
 
             self._anthropic = anthropic
         except ImportError:
-            raise ImportError(
-                "anthropic package not installed — run: pip install anthropic"
-            )
+            raise ImportError("anthropic package not installed — run: pip install anthropic")
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable is not set.")
@@ -265,10 +262,7 @@ class GeminiBackend(LLMBackend):
 
             self._genai = genai
         except ImportError:
-            raise ImportError(
-                "google-generativeai package not installed — run: "
-                "pip install google-generativeai"
-            )
+            raise ImportError("google-generativeai package not installed — run: pip install google-generativeai")
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is not set.")
@@ -309,9 +303,7 @@ class MistralBackend(LLMBackend):
 
             self._Mistral = Mistral
         except ImportError:
-            raise ImportError(
-                "mistralai package not installed — run: pip install mistralai"
-            )
+            raise ImportError("mistralai package not installed — run: pip install mistralai")
         api_key = os.environ.get("MISTRAL_API_KEY")
         if not api_key:
             raise ValueError("MISTRAL_API_KEY environment variable is not set.")
@@ -390,10 +382,7 @@ def explain_tlc_error(
     """
     BackendClass = BACKENDS.get(backend_name)
     if BackendClass is None:
-        console.print(
-            f"[yellow]⚠ Unknown LLM backend: '{backend_name}'. "
-            f"Choose one of: {', '.join(BACKEND_NAMES)}.[/yellow]"
-        )
+        console.print(f"[yellow]⚠ Unknown LLM backend: '{backend_name}'. Choose one of: {', '.join(BACKEND_NAMES)}.[/yellow]")
         return
 
     try:
@@ -452,10 +441,7 @@ def explain_sany_error(
     """
     BackendClass = BACKENDS.get(backend_name)
     if BackendClass is None:
-        console.print(
-            f"[yellow]⚠ Unknown LLM backend: '{backend_name}'. "
-            f"Choose one of: {', '.join(BACKEND_NAMES)}.[/yellow]"
-        )
+        console.print(f"[yellow]⚠ Unknown LLM backend: '{backend_name}'. Choose one of: {', '.join(BACKEND_NAMES)}.[/yellow]")
         return
 
     try:
@@ -510,10 +496,7 @@ def explain_tlapm_error(
     """
     BackendClass = BACKENDS.get(backend_name)
     if BackendClass is None:
-        console.print(
-            f"[yellow]⚠ Unknown LLM backend: '{backend_name}'. "
-            f"Choose one of: {', '.join(BACKEND_NAMES)}.[/yellow]"
-        )
+        console.print(f"[yellow]⚠ Unknown LLM backend: '{backend_name}'. Choose one of: {', '.join(BACKEND_NAMES)}.[/yellow]")
         return
 
     try:

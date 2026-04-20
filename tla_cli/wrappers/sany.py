@@ -13,7 +13,6 @@ Classes:
 import re
 import shutil
 import subprocess
-
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from logging import Logger
@@ -27,7 +26,6 @@ from rich.spinner import Spinner
 from rich.text import Text
 
 from .java import JavaClassTool
-
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -229,16 +227,11 @@ class SANYOutputDisplay:
             if current > self._last_module_count:
                 self._last_module_count = current
                 if semantic:
-                    self._console.print(
-                        f"[dim]{self._module_name}[/dim] · "
-                        f"Semantic analysis: {len(semantic)} module(s)"
-                    )
+                    self._console.print(f"[dim]{self._module_name}[/dim] · Semantic analysis: {len(semantic)} module(s)")
                 elif parsed:
                     from pathlib import Path as _Path
-                    self._console.print(
-                        f"[dim]{self._module_name}[/dim] · "
-                        f"Parsing: {_Path(parsed[-1]).name}"
-                    )
+
+                    self._console.print(f"[dim]{self._module_name}[/dim] · Parsing: {_Path(parsed[-1]).name}")
 
     def show_summary(self, run: SANYRun) -> None:
         """Print the final summary panel after the live display has closed.
@@ -264,9 +257,7 @@ class SANYOutputDisplay:
             for diag in run.errors[:5]:
                 body_lines.append(Text(f"  {diag.message[:120]}", style="red"))
             if len(run.errors) > 5:
-                body_lines.append(
-                    Text(f"  … and {len(run.errors) - 5} more", style="dim")
-                )
+                body_lines.append(Text(f"  … and {len(run.errors) - 5} more", style="dim"))
             body = Text("\n").join(body_lines)
 
         style = "green" if run.success else "red"
@@ -372,9 +363,7 @@ class SANY(JavaClassTool):
         cmd = self.get_java_command([module_path.name], extra_classpath=extra_cp)
         output_lines: list[str] = []
         parser = SANYOutputParser()
-        display = SANYOutputDisplay(
-            self.console, module_path.stem, interactive=interactive, silent=silent
-        )
+        display = SANYOutputDisplay(self.console, module_path.stem, interactive=interactive, silent=silent)
 
         with display:
             process = subprocess.Popen(

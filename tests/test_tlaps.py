@@ -10,21 +10,18 @@ Tests cover:
 - populate_run() field transfer
 """
 
-import pytest
-
 from datetime import datetime
+
 from tla_cli.wrappers.tlaps import (
+    BEING_PROVED,
+    FAILED,
+    PROVED,
+    TO_BE_PROVED,
+    TRIVIAL,
     TLAPMObligation,
     TLAPMOutputParser,
     TLAPMRun,
-    TO_BE_PROVED,
-    BEING_PROVED,
-    PROVED,
-    TRIVIAL,
-    FAILED,
-    OMITTED,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,8 +35,7 @@ def _run_parser(lines: list[str]) -> TLAPMOutputParser:
     return p
 
 
-def _obl_block(obl_id: int, status: str, prover: str = "", reason: str = "",
-               loc: str = "10:1:10:10", already: str = "") -> list[str]:
+def _obl_block(obl_id: int, status: str, prover: str = "", reason: str = "", loc: str = "10:1:10:10", already: str = "") -> list[str]:
     lines = [
         "@!!BEGIN",
         "@!!type:obligation",
@@ -120,10 +116,7 @@ def test_obligation_already_false():
 
 def test_obligation_status_updated():
     """First block has 'to be proved', second block updates to 'proved'."""
-    lines = (
-        _obl_block(1, TO_BE_PROVED)
-        + _obl_block(1, PROVED, prover="smt")
-    )
+    lines = _obl_block(1, TO_BE_PROVED) + _obl_block(1, PROVED, prover="smt")
     p = _run_parser(lines)
     obls = p.get_obligations()
     assert len(obls) == 1
@@ -295,10 +288,7 @@ def test_run_num_proved_empty():
 
 
 def test_populate_run_transfers_obligations():
-    lines = (
-        _obl_block(1, PROVED, prover="zenon")
-        + _obl_block(2, TRIVIAL, prover="tlapm")
-    )
+    lines = _obl_block(1, PROVED, prover="zenon") + _obl_block(2, TRIVIAL, prover="tlapm")
     p = _run_parser(lines)
     run = _make_run()
     p.populate_run(run)
@@ -309,10 +299,7 @@ def test_populate_run_transfers_obligations():
 
 
 def test_populate_run_uses_info_line():
-    lines = (
-        _obl_block(1, PROVED)
-        + ["[INFO]: All 10 obligations proved."]
-    )
+    lines = _obl_block(1, PROVED) + ["[INFO]: All 10 obligations proved."]
     p = _run_parser(lines)
     run = _make_run()
     p.populate_run(run)

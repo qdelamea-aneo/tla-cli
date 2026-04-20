@@ -2,7 +2,6 @@
 
 import json
 import sys
-
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -36,14 +35,9 @@ if TYPE_CHECKING:
 @click.option(
     "--external-module",
     metavar="MODULE_PATH",
-    type=click.Path(
-        exists=True, dir_okay=True, file_okay=True, resolve_path=True, path_type=Path
-    ),
+    type=click.Path(exists=True, dir_okay=True, file_okay=True, resolve_path=True, path_type=Path),
     multiple=True,
-    help=(
-        "Additional TLA+ module file or directory to add to tlapm's search "
-        "path (-I).  Repeat for multiple entries."
-    ),
+    help=("Additional TLA+ module file or directory to add to tlapm's search path (-I).  Repeat for multiple entries."),
 )
 @click.option(
     "--timeout",
@@ -57,10 +51,7 @@ if TYPE_CHECKING:
     "no_progress",
     is_flag=True,
     default=False,
-    help=(
-        "Disable the interactive live display.  Each progress update is "
-        "printed as a plain line instead."
-    ),
+    help=("Disable the interactive live display.  Each progress update is printed as a plain line instead."),
 )
 @click.option(
     "--explain",
@@ -91,7 +82,8 @@ if TYPE_CHECKING:
     help="Clear the fingerprint cache before running.",
 )
 @click.option(
-    "--format", "output_format",
+    "--format",
+    "output_format",
     type=click.Choice(["text", "json"], case_sensitive=False),
     default="text",
     show_default=True,
@@ -123,14 +115,11 @@ def tla_proof_check(
     for p in external_module:
         if p.is_file() and p.suffix == ".jar":
             raise click.BadArgumentUsage(
-                f"'{p.name}' is a JAR file. tlapm does not use a Java classpath; "
-                "pass a .tla file or a directory instead."
+                f"'{p.name}' is a JAR file. tlapm does not use a Java classpath; pass a .tla file or a directory instead."
             )
 
     if not app.tlapm.is_available():
-        raise click.ClickException(
-            "tlapm is not bundled with this version of tla-cli."
-        )
+        raise click.ClickException("tlapm is not bundled with this version of tla-cli.")
 
     include_dirs = [p if p.is_dir() else p.parent for p in external_module]
 
