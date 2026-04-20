@@ -10,3 +10,4 @@ build/
 *.egg
 .tla/
 .tlacache/
+tla_cli/tools/tlapm/
