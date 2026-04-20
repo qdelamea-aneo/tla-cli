@@ -1074,6 +1074,13 @@ class TLCOutputDisplay:
                 parts.append(Text(""))
                 parts.append(self._build_trace_table(tlc_run.trace))
 
+        elif error_kind == "timeout":
+            mode = (tlc_run.mode or "").lower()
+            if "simulation" in mode:
+                parts.append(Text.from_markup("[yellow]⏱[/yellow] Simulation stopped (timeout)."))
+            else:
+                parts.append(Text.from_markup(f"{status_icon} [red]Model checking timed out[/red]"))
+
         else:
             # runtime_error, unknown, or any unrecognised kind
             parts.append(Text.from_markup(f"{status_icon} [red]{error_type}[/red]"))

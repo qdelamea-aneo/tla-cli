@@ -398,3 +398,111 @@ def test_parse_loc_non_numeric():
 
 def test_parse_loc_too_many_parts():
     assert _parse_loc("10:1:10:25:99") is None
+
+
+# ---------------------------------------------------------------------------
+# Issue 11 — tlapm crash shows confusing "0/0 obligation(s) failed"
+# ---------------------------------------------------------------------------
+
+
+def test_show_summary_crash_no_obligations():
+    """When tlapm_run.success=False and num_obligations=0, the output must NOT
+    contain '0/0 obligation(s)' and must contain a crash-specific message."""
+    from io import StringIO
+    from rich.console import Console
+    from tla_cli.wrappers.tlaps import TLAPMOutputDisplay
+
+    buf = StringIO()
+    console = Console(file=buf, highlight=False, markup=True)
+    display = TLAPMOutputDisplay(console, "TestModule", interactive=False, silent=False)
+
+    run = TLAPMRun(started_at=datetime.now())
+    run.success = False
+    run.num_obligations = 0
+    run.errors = ["Cannot parse module TestModule"]
+
+    display.show_summary(run)
+    output = buf.getvalue()
+
+    assert "0/0 obligation(s)" not in output
+    # Should mention the error or a fallback message
+    assert ("tlapm error" in output) or ("no obligations were checked" in output)
+
+
+def test_show_summary_crash_no_obligations_no_errors():
+    """When tlapm crashed with no obligations and no error messages, show fallback."""
+    from io import StringIO
+    from rich.console import Console
+    from tla_cli.wrappers.tlaps import TLAPMOutputDisplay
+
+    buf = StringIO()
+    console = Console(file=buf, highlight=False, markup=True)
+    display = TLAPMOutputDisplay(console, "TestModule", interactive=False, silent=False)
+
+    run = TLAPMRun(started_at=datetime.now())
+    run.success = False
+    run.num_obligations = 0
+
+    display.show_summary(run)
+    output = buf.getvalue()
+
+    assert "0/0 obligation(s)" not in output
+    assert "no obligations were checked" in output
+
+
+# ---------------------------------------------------------------------------
+# Issue 12 — Rich [/dim] markup leaks when obligation text is truncated
+# ---------------------------------------------------------------------------
+
+
+def test_obligation_text_escaped():
+    """Obligation text containing Rich markup characters must not produce raw
+    markup tags in the output — they should be escaped."""
+    from io import StringIO
+    from rich.console import Console
+    from tla_cli.wrappers.tlaps import TLAPMOutputDisplay, FAILED
+
+    buf = StringIO()
+    console = Console(file=buf, highlight=False, markup=True)
+    display = TLAPMOutputDisplay(console, "TestModule", interactive=False, silent=False)
+
+    run = TLAPMRun(started_at=datetime.now())
+    run.success = False
+    run.num_obligations = 1
+    # obl text with Rich markup chars that should be escaped
+    run.obligations = {
+        1: TLAPMObligation(id=1, loc="10:1:10:20", status=FAILED,
+                           obl=r"ASSUME NEW x \in [1..10] PROVE x > 0")
+    }
+
+    # Should not raise; the [1..10] brackets must be escaped
+    display.show_summary(run)
+    output = buf.getvalue()
+    assert "obligation(s) failed" in output
+
+
+def test_obligation_text_truncated_before_markup():
+    """Very long obligation text must be truncated before being wrapped in markup
+    so that the truncation cannot break an unclosed markup tag."""
+    from io import StringIO
+    from rich.console import Console
+    from tla_cli.wrappers.tlaps import TLAPMOutputDisplay, FAILED
+
+    buf = StringIO()
+    console = Console(file=buf, highlight=False, markup=True)
+    display = TLAPMOutputDisplay(console, "TestModule", interactive=False, silent=False)
+
+    run = TLAPMRun(started_at=datetime.now())
+    run.success = False
+    run.num_obligations = 1
+    long_obl = "x" * 300  # 300 chars, well over the 200-char limit
+    run.obligations = {
+        1: TLAPMObligation(id=1, loc="10:1:10:20", status=FAILED, obl=long_obl)
+    }
+
+    # Must not raise and must produce output
+    display.show_summary(run)
+    output = buf.getvalue()
+    assert "obligation(s) failed" in output
+    # The truncation ellipsis must appear somewhere in the raw console output
+    assert "…" in output

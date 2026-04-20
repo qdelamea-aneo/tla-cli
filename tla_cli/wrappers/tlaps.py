@@ -39,6 +39,7 @@ from rich.progress import (
     TextColumn,
     TimeElapsedColumn,
 )
+from rich.markup import escape
 from rich.text import Text
 
 from .base import Tool
@@ -431,6 +432,20 @@ class TLAPMOutputDisplay:
         total = run.num_obligations or len(run.obligations)
         duration_s = run.duration.total_seconds() if run.duration else 0
 
+        if total == 0 and not run.success:
+            error_messages = list(run.errors or []) + list(run.warnings or [])
+            error_lines = [m.strip() for m in error_messages if m.strip()]
+            if error_lines:
+                body_text = "tlapm error:\n" + "\n".join(f"  {line}" for line in error_lines[:5])
+            else:
+                body_text = "tlapm exited with an error (no obligations were checked)"
+            self._console.print(Panel(
+                Text(body_text, style="red"),
+                title=f"[bold]TLAPM · {self._module_name}[/bold]",
+                border_style="red", expand=False, padding=(0, 1)
+            ))
+            return
+
         if run.success:
             lines: list[str] = [
                 f"[green]✓[/green] All {proved} obligation(s) proved.",
@@ -452,7 +467,10 @@ class TLAPMOutputDisplay:
                 reason_str = f" — {obl.reason[:80]}" if obl.reason else ""
                 lines.append(f"  [red]•[/red] {loc_str}{prover_str}{reason_str}")
                 if obl.obl:
-                    lines.append(f"    [dim]{obl.obl[:120].strip()}[/dim]")
+                    raw_obl = obl.obl.strip()
+                    if len(raw_obl) > 200:
+                        raw_obl = raw_obl[:200] + "…"
+                    lines.append(f"    [dim]{escape(raw_obl)}[/dim]")
             if len(failed_obls) > 10:
                 lines.append(f"  … and {len(failed_obls) - 10} more")
             for err in run.errors[:3]:

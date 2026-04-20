@@ -429,3 +429,37 @@ def test_tespecdoutdir_passed_to_simulate(tmp_path):
     assert "-teSpecOutDir" in cmd
     te_idx = cmd.index("-teSpecOutDir")
     assert cmd[te_idx + 1] == str(cache_dir)
+
+
+# ---------------------------------------------------------------------------
+# Issue 10 — Timeout shows "Unknown error (exit -9)" instead of clear message
+# ---------------------------------------------------------------------------
+
+
+def test_timed_out_false_by_default():
+    """TLCRun.timed_out must default to False."""
+    run = TLCRun(started_at=datetime.now())
+    assert run.timed_out is False
+
+
+def test_timed_out_sets_error_kind():
+    """When timed_out=True, _parse_failure must set error_kind='timeout' and
+    error_type='Timeout', bypassing the exit-code lookup."""
+    tlc = make_tlc()
+    run = fresh_run()
+    run.timed_out = True
+    tlc._parse_failure(run, "", -9)
+    assert run.error_kind == "timeout"
+    assert run.error_type == "Timeout"
+    assert run.success is False
+
+
+def test_timed_out_skips_exit_code_mapping():
+    """When timed_out=True, the exit code must not change error_kind."""
+    tlc = make_tlc()
+    run = fresh_run()
+    run.timed_out = True
+    # Exit code 11 would normally map to "deadlock", but timeout takes priority
+    tlc._parse_failure(run, "", 11)
+    assert run.error_kind == "timeout"
+    assert run.error_type == "Timeout"

@@ -438,6 +438,7 @@ class TLC(JavaClassTool):
             def _kill():
                 try:
                     process.kill()
+                    run.timed_out = True
                 except ProcessLookupError:
                     pass
 
@@ -486,6 +487,11 @@ class TLC(JavaClassTool):
         - other  → ``"unknown"``
         """
         tlc_run.success = False
+
+        if tlc_run.timed_out:
+            tlc_run.error_type = "Timeout"
+            tlc_run.error_kind = "timeout"
+            return
 
         if code in self.tlc_exit_codes:
             tlc_run.error_type = self.tlc_exit_codes[code]
