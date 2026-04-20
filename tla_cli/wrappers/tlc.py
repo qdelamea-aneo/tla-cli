@@ -93,6 +93,7 @@ class TLCRun:
     diagnostics: Optional[list[TLCDiagnostic]] = None
     error_kind: Optional[str] = None
     trace: Optional[list[TLCTraceState]] = None
+    timed_out: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert this instance to a JSON-serialisable dictionary."""
@@ -188,6 +189,9 @@ class TLC(JavaClassTool):
         interactive: bool = True,
         silent: bool = False,
         cache_dir: Optional[Path] = None,
+        no_deadlock: bool = False,
+        continue_after_error: bool = False,
+        difftrace: bool = False,
     ) -> TLCRun:
         """Run TLC in exhaustive model-checking mode and return the results.
 
@@ -224,12 +228,17 @@ class TLC(JavaClassTool):
 
         tlc_args = ["-workers", str(workers), "-config", str(model_path)]
 
+        if cache_dir is not None:
+            tlc_args.extend(["-teSpecOutDir", str(cache_dir)])
+
         if save_states:
             tlc_run.states_file = run_dir / "states.dot"
             tlc_args.extend(["-dump", "dot", str(tlc_run.states_file)])
 
         if export_json:
-            tlc_args.extend(["-dump", "json", str(run_dir / "states.json")])
+            trace_file = run_dir / "trace"   # TLC appends .json automatically
+            tlc_args.extend(["-dumpTrace", "json", str(trace_file)])
+            tlc_run.states_file = run_dir / "trace.json"
 
         if checkpoint_dir is not None:
             checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -240,6 +249,13 @@ class TLC(JavaClassTool):
 
         if coverage_interval is not None:
             tlc_args.extend(["-coverage", str(coverage_interval)])
+
+        if no_deadlock:
+            tlc_args.append("-deadlock")
+        if continue_after_error:
+            tlc_args.append("-continue")
+        if difftrace:
+            tlc_args.append("-difftrace")
 
         tlc_args.append(str(module_path))
 
@@ -276,7 +292,7 @@ class TLC(JavaClassTool):
         module_path: Path,
         model_path: Path,
         *,
-        workers: int,
+        workers: Union[int, str] = 1,
         max_heap_size: str,
         community_modules: bool,
         tlaps_stdlib: bool = False,
@@ -289,6 +305,9 @@ class TLC(JavaClassTool):
         interactive: bool = True,
         silent: bool = False,
         cache_dir: Optional[Path] = None,
+        no_deadlock: bool = False,
+        continue_after_error: bool = False,
+        difftrace: bool = False,
     ) -> TLCRun:
         """Run TLC in simulation mode and return the results.
 
@@ -320,13 +339,26 @@ class TLC(JavaClassTool):
         run_dir = cache_dir or module_path.parent
         tlc_run = TLCRun(started_at=datetime.now())
 
-        tlc_args = ["-simulate", "-workers", str(workers), "-config", str(model_path)]
+        simulate_arg = ["-simulate"]
+        if num_traces is not None:
+            simulate_arg.append(f"num={num_traces}")
+        tlc_args = simulate_arg + ["-workers", str(workers), "-config", str(model_path)]
+
+        if cache_dir is not None:
+            tlc_args.extend(["-teSpecOutDir", str(cache_dir)])
+
         if depth is not None:
             tlc_args.extend(["-depth", str(depth)])
         if seed is not None:
             tlc_args.extend(["-seed", str(seed)])
-        if num_traces is not None:
-            tlc_args.extend(["-numTraces", str(num_traces)])
+
+        if no_deadlock:
+            tlc_args.append("-deadlock")
+        if continue_after_error:
+            tlc_args.append("-continue")
+        if difftrace:
+            tlc_args.append("-difftrace")
+
         tlc_args.append(str(module_path))
 
         extra_cp = self._build_extra_classpath(community_modules, tlaps_stdlib, external_modules)

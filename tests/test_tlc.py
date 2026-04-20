@@ -9,7 +9,7 @@ No real TLC process is launched — all subprocess calls are mocked.
 
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -188,3 +188,244 @@ def test_tlcrun_defaults():
     assert run.error_msg is None
     assert run.coverage is None
     assert run.progress_history is None
+
+
+# ---------------------------------------------------------------------------
+# Helpers for subprocess-level tests
+# ---------------------------------------------------------------------------
+
+
+def _mock_popen(returncode: int = 0, lines: list[str] | None = None):
+    proc = MagicMock()
+    proc.stdout = iter(lines or [])
+    proc.returncode = returncode
+    proc.wait.return_value = None
+    return proc
+
+
+# ---------------------------------------------------------------------------
+# Issue 05 — --export-json uses -dumpTrace json, not -dump json
+# ---------------------------------------------------------------------------
+
+
+def test_export_json_uses_dumptrace(tmp_path):
+    """When export_json=True the command must include -dumpTrace, not -dump json."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+
+    with patch("subprocess.Popen", return_value=_mock_popen()) as mock_popen:
+        make_tlc().start(
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            export_json=True,
+            interactive=False,
+            silent=True,
+            cache_dir=tmp_path / "cache",
+        )
+
+    cmd = mock_popen.call_args[0][0]
+    assert "-dumpTrace" in cmd
+    assert "-dump" not in cmd or cmd[cmd.index("-dump") + 1] not in ("json",)
+
+
+def test_export_json_sets_states_file(tmp_path):
+    """When export_json=True, run.states_file must point to a path ending trace.json."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+    cache_dir = tmp_path / "cache"
+
+    with patch("subprocess.Popen", return_value=_mock_popen()):
+        run = make_tlc().start(
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            export_json=True,
+            interactive=False,
+            silent=True,
+            cache_dir=cache_dir,
+        )
+
+    assert run.states_file is not None
+    assert run.states_file.name == "trace.json"
+
+
+def test_export_json_false_no_dumptrace(tmp_path):
+    """When export_json=False, -dumpTrace must not appear in the command."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+
+    with patch("subprocess.Popen", return_value=_mock_popen()) as mock_popen:
+        make_tlc().start(
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            export_json=False,
+            interactive=False,
+            silent=True,
+            cache_dir=tmp_path / "cache",
+        )
+
+    cmd = mock_popen.call_args[0][0]
+    assert "-dumpTrace" not in cmd
+
+
+# ---------------------------------------------------------------------------
+# Issue 06 — --num-traces uses -simulate num=N, not -numTraces
+# ---------------------------------------------------------------------------
+
+
+def test_num_traces_uses_simulate_num(tmp_path):
+    """When num_traces=10, the command must contain '-simulate' and 'num=10',
+    and must NOT contain '-numTraces'."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+
+    with patch("subprocess.Popen", return_value=_mock_popen()) as mock_popen:
+        make_tlc().simulate(
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            num_traces=10,
+            interactive=False,
+            silent=True,
+            cache_dir=tmp_path / "cache",
+        )
+
+    cmd = mock_popen.call_args[0][0]
+    assert "-simulate" in cmd
+    assert "num=10" in cmd
+    assert "-numTraces" not in cmd
+
+
+def test_num_traces_none_uses_plain_simulate(tmp_path):
+    """When num_traces=None, '-simulate' appears without any 'num=' argument."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+
+    with patch("subprocess.Popen", return_value=_mock_popen()) as mock_popen:
+        make_tlc().simulate(
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            num_traces=None,
+            interactive=False,
+            silent=True,
+            cache_dir=tmp_path / "cache",
+        )
+
+    cmd = mock_popen.call_args[0][0]
+    assert "-simulate" in cmd
+    assert not any(arg.startswith("num=") for arg in cmd)
+
+
+def test_num_traces_correctly_ordered(tmp_path):
+    """-simulate [num=N] must appear before -workers in the command."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+
+    with patch("subprocess.Popen", return_value=_mock_popen()) as mock_popen:
+        make_tlc().simulate(
+            spec,
+            cfg,
+            workers=2,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            num_traces=5,
+            interactive=False,
+            silent=True,
+            cache_dir=tmp_path / "cache",
+        )
+
+    cmd = mock_popen.call_args[0][0]
+    sim_idx = cmd.index("-simulate")
+    num_idx = cmd.index("num=5")
+    workers_idx = cmd.index("-workers")
+    assert sim_idx < num_idx < workers_idx
+
+
+# ---------------------------------------------------------------------------
+# Issue 13 — TTrace files redirected to cache dir via -teSpecOutDir
+# ---------------------------------------------------------------------------
+
+
+def test_tespecdoutdir_passed_to_start(tmp_path):
+    """When cache_dir is provided to start(), -teSpecOutDir must appear in args."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+    cache_dir = tmp_path / "cache"
+
+    with patch("subprocess.Popen", return_value=_mock_popen()) as mock_popen:
+        make_tlc().start(
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            interactive=False,
+            silent=True,
+            cache_dir=cache_dir,
+        )
+
+    cmd = mock_popen.call_args[0][0]
+    assert "-teSpecOutDir" in cmd
+    te_idx = cmd.index("-teSpecOutDir")
+    assert cmd[te_idx + 1] == str(cache_dir)
+
+
+def test_tespecdoutdir_passed_to_simulate(tmp_path):
+    """When cache_dir is provided to simulate(), -teSpecOutDir must appear in args."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+    cache_dir = tmp_path / "cache"
+
+    with patch("subprocess.Popen", return_value=_mock_popen()) as mock_popen:
+        make_tlc().simulate(
+            spec,
+            cfg,
+            workers=1,
+            max_heap_size="1G",
+            community_modules=False,
+            external_modules=[],
+            interactive=False,
+            silent=True,
+            cache_dir=cache_dir,
+        )
+
+    cmd = mock_popen.call_args[0][0]
+    assert "-teSpecOutDir" in cmd
+    te_idx = cmd.index("-teSpecOutDir")
+    assert cmd[te_idx + 1] == str(cache_dir)

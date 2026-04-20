@@ -4,7 +4,7 @@ import json
 import sys
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 import rich_click as click
 
@@ -14,16 +14,58 @@ if TYPE_CHECKING:
     from ..cli import AppContext
 
 
+class _WorkersParamType(click.ParamType):
+    name = "workers"
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, int):
+            return value
+        if value == "auto":
+            return "auto"
+        try:
+            n = int(value)
+            if n < 1:
+                self.fail(f"must be a positive integer or 'auto', got '{value}'", param, ctx)
+            return n
+        except (TypeError, ValueError):
+            self.fail(f"'{value}' is not a valid integer or 'auto'", param, ctx)
+
+
+_WORKERS_TYPE = _WorkersParamType()
+
+
 def _common_tlc_options(func):
     """Decorator that attaches options shared by model-check and simulate."""
     func = click.option(
         "--workers",
         "-w",
         metavar="NUM_WORKERS",
-        type=int,
+        type=_WORKERS_TYPE,
         default=1,
         show_default=True,
-        help="Number of worker threads for TLC.",
+        help="Number of worker threads for TLC. Use 'auto' to use all available cores.",
+    )(func)
+    func = click.option(
+        "--no-deadlock",
+        is_flag=True,
+        default=False,
+        help=(
+            "Disable deadlock checking. Use for specifications that intentionally "
+            "terminate (reach a state with no enabled actions)."
+        ),
+    )(func)
+    func = click.option(
+        "--continue",
+        "continue_after_error",
+        is_flag=True,
+        default=False,
+        help="Continue model checking after the first error to find all violations.",
+    )(func)
+    func = click.option(
+        "--difftrace",
+        is_flag=True,
+        default=False,
+        help="Show only changed variables in error traces (reduces verbosity for large models).",
     )(func)
     func = click.option(
         "--max-heap-size",
@@ -104,7 +146,7 @@ def _common_tlc_options(func):
     "--export-json",
     "-j",
     is_flag=True,
-    help="Export the reachable state space as a JSON file.",
+    help="Export the error trace as a JSON file when a violation is found (-dumpTrace json). No-op when no violation is found.",
 )
 @click.option(
     "--checkpoint-dir",
@@ -157,7 +199,7 @@ def tla_model_check(
     app: "AppContext",
     module_path: Path,
     model_path: Optional[Path],
-    workers: int,
+    workers: Union[int, str],
     max_heap_size: str,
     community_modules: bool,
     tlaps_stdlib: bool,
@@ -169,6 +211,9 @@ def tla_model_check(
     coverage: Optional[int],
     timeout: Optional[int],
     no_progress: bool,
+    no_deadlock: bool,
+    continue_after_error: bool,
+    difftrace: bool,
     explain: bool,
     llm_backend: str,
     output_format: str,
@@ -207,6 +252,9 @@ def tla_model_check(
         interactive=not (no_progress or use_json),
         silent=use_json,
         cache_dir=cache_dir,
+        no_deadlock=no_deadlock,
+        continue_after_error=continue_after_error,
+        difftrace=difftrace,
     )
 
     if use_json:
@@ -283,7 +331,7 @@ def tla_simulate(
     app: "AppContext",
     module_path: Path,
     model_path: Optional[Path],
-    workers: int,
+    workers: Union[int, str],
     max_heap_size: str,
     community_modules: bool,
     tlaps_stdlib: bool,
@@ -293,6 +341,9 @@ def tla_simulate(
     num_traces: Optional[int],
     timeout: Optional[int],
     no_progress: bool,
+    no_deadlock: bool,
+    continue_after_error: bool,
+    difftrace: bool,
     explain: bool,
     llm_backend: str,
     output_format: str,
@@ -327,6 +378,9 @@ def tla_simulate(
         interactive=not (no_progress or use_json),
         silent=use_json,
         cache_dir=cache_dir,
+        no_deadlock=no_deadlock,
+        continue_after_error=continue_after_error,
+        difftrace=difftrace,
     )
 
     if use_json:
