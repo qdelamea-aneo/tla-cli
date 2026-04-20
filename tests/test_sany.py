@@ -121,7 +121,7 @@ def test_fatal_errors_triggers_error_accumulation():
 
 
 def test_error_block_not_started_for_errors_line():
-    """The '*** Errors: N' line should flush but not start a new block."""
+    """Inside a parse-exception block, '*** Errors: N' flushes but does not re-enter."""
     lines = [
         "SANY2 Parse Exception",
         "Something bad happened",
@@ -131,6 +131,92 @@ def test_error_block_not_started_for_errors_line():
     errors = p.get_errors()
     # One error block for the parse exception content
     assert len(errors) == 1
+
+
+# ---------------------------------------------------------------------------
+# has_errors() — error flag from *** Errors: N
+# ---------------------------------------------------------------------------
+
+
+def test_has_errors_false_with_no_errors():
+    p = _run_parser(["Parsing file /a.tla", "Semantic processing of module A"])
+    assert p.has_errors() is False
+
+
+def test_has_errors_true_after_errors_line_nonzero():
+    """*** Errors: 1 with no preceding exception block → has_errors() is True."""
+    p = _run_parser(["*** Errors: 1"])
+    assert p.has_errors() is True
+
+
+def test_has_errors_false_after_errors_line_zero():
+    """*** Errors: 0 must not set the error flag."""
+    p = _run_parser(["*** Errors: 0"])
+    assert p.has_errors() is False
+
+
+def test_has_errors_true_from_parse_exception():
+    """Accumulated parse-exception content also makes has_errors() True."""
+    lines = [
+        "SANY2 Parse Exception",
+        "Oops",
+    ]
+    p = _run_parser(lines)
+    assert p.has_errors() is True
+
+
+# ---------------------------------------------------------------------------
+# Semantic error format: content follows *** Errors: N
+# ---------------------------------------------------------------------------
+
+
+def test_semantic_error_content_captured_after_errors_line():
+    """When *** Errors: N appears outside a parse-exception block, the
+    location + message lines that follow must be captured as a diagnostic."""
+    lines = [
+        "Parsing file /Spec.tla",
+        "Semantic processing of module Spec",
+        "Semantic errors:",
+        "",
+        "*** Errors: 1",
+        "",
+        "line 9, col 14 to line 9, col 26 of module Spec",
+        "",
+        "Unknown operator: `undeclaredVar'.",
+    ]
+    p = _run_parser(lines)
+    errors = p.get_errors()
+    assert len(errors) == 1
+    assert "Unknown operator" in errors[0].message
+    assert "line 9" in errors[0].message
+
+
+def test_semantic_error_has_errors_flag_set():
+    lines = [
+        "Semantic errors:",
+        "",
+        "*** Errors: 1",
+        "",
+        "line 9, col 14 to line 9, col 26 of module Spec",
+        "",
+        "Unknown operator: `undeclaredVar'.",
+    ]
+    p = _run_parser(lines)
+    assert p.has_errors() is True
+
+
+def test_semantic_errors_header_alone_does_not_set_flag():
+    """The 'Semantic errors:' header by itself (without *** Errors: N > 0) must not
+    set the flag — the header may appear even with zero errors in some SANY versions."""
+    lines = [
+        "Parsing file /Spec.tla",
+        "Semantic processing of module Spec",
+        "Semantic errors:",
+        "",
+        "*** Errors: 0",
+    ]
+    p = _run_parser(lines)
+    assert p.has_errors() is False
 
 
 def test_multiple_error_blocks():

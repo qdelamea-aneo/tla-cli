@@ -103,6 +103,7 @@ class SANYOutputParser:
         self._errors: list[SANYDiagnostic] = []
         self._error_accumulator: list[str] = []
         self._in_error_block: bool = False
+        self._has_errors: bool = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -127,8 +128,18 @@ class SANYOutputParser:
             self._in_error_block = True
             return
 
-        if self._RE_ERRORS.search(line):
-            self._flush_error()
+        m = self._RE_ERRORS.search(line)
+        if m:
+            count = int(m.group(1))
+            if count > 0:
+                self._has_errors = True
+            if not self._in_error_block and count > 0:
+                # Semantic errors: location + message follow this line.
+                self._flush_error()
+                self._in_error_block = True
+            else:
+                # Parse exception: content came before this line; just flush.
+                self._flush_error()
             return
 
         if self._RE_ABORT.match(line):
@@ -148,6 +159,11 @@ class SANYOutputParser:
     def get_errors(self) -> list[SANYDiagnostic]:
         self._flush_error()
         return list(self._errors)
+
+    def has_errors(self) -> bool:
+        """Return True if any errors were detected, whether or not their text was captured."""
+        self._flush_error()
+        return self._has_errors or len(self._errors) > 0
 
     def populate_run(self, run: SANYRun) -> None:
         """Write all extracted data into *run*."""
@@ -389,8 +405,8 @@ class SANY(JavaClassTool):
 
         run.ended_at = datetime.now()
         run.duration = run.ended_at - run.started_at
-        run.success = process.returncode == 0
         parser.populate_run(run)
+        run.success = process.returncode == 0 and not parser.has_errors()
 
         if cache_dir is not None:
             if cache_dir.exists():
