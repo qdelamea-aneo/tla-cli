@@ -87,12 +87,14 @@ def tla_parse(
     errors.
     """
     use_json = output_format == "json"
+    cache_dir = app.cache_dir / module_path.stem / "sany"
     run = app.sany.parse(
         module_path,
         community_modules=community_modules,
         external_modules=list(external_module),
         interactive=not (no_progress or use_json),
         silent=use_json,
+        cache_dir=cache_dir,
     )
 
     if use_json:

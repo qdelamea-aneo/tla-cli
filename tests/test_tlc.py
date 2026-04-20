@@ -25,7 +25,6 @@ def make_tlc() -> TLC:
     """Create a :class:`TLC` instance with all dependencies mocked."""
     return TLC(
         main_class="tlc2.TLC",
-        data_path=Path("/tmp"),
         tla2tools_jar=Path("/fake/tla2tools.jar"),
         community_modules_jar=Path("/fake/community.jar"),
         logger=MagicMock(),

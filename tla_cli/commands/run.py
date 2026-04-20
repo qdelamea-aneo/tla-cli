@@ -107,6 +107,7 @@ def tla_run(
         skip_passed=skip_passed,
         interactive=not (no_progress or use_json),
         silent=use_json,
+        cache_dir=app.cache_dir,
     )
 
     if use_json:

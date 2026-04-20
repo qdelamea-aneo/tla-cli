@@ -190,6 +190,8 @@ def tla_model_check(
 
     use_json = output_format == "json"
     model_path = model_path or module_path.with_suffix(".cfg")
+    model_name = "default" if model_path.stem == module_path.stem else model_path.stem
+    cache_dir = app.cache_dir / module_path.stem / "tlc" / model_name
     run = app.tlc.start(
         module_path,
         model_path,
@@ -205,6 +207,7 @@ def tla_model_check(
         timeout=timedelta(seconds=timeout) if timeout is not None else None,
         interactive=not (no_progress or use_json),
         silent=use_json,
+        cache_dir=cache_dir,
     )
 
     if use_json:
@@ -306,6 +309,8 @@ def tla_simulate(
 
     use_json = output_format == "json"
     model_path = model_path or module_path.with_suffix(".cfg")
+    model_name = "default" if model_path.stem == module_path.stem else model_path.stem
+    cache_dir = app.cache_dir / module_path.stem / "tlc" / model_name
     run = app.tlc.simulate(
         module_path,
         model_path,
@@ -319,6 +324,7 @@ def tla_simulate(
         timeout=timedelta(seconds=timeout) if timeout is not None else None,
         interactive=not (no_progress or use_json),
         silent=use_json,
+        cache_dir=cache_dir,
     )
 
     if use_json:

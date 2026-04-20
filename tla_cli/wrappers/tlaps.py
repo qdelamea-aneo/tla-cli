@@ -18,6 +18,7 @@ Classes:
     TLAPM: Tool class that invokes tlapm and returns a TLAPMRun.
 """
 
+import os
 import re
 import subprocess
 import threading
@@ -460,12 +461,10 @@ class TLAPM(Tool):
         community_modules_dir: Path,
         logger: Logger,
         console: Console,
-        data_path: Optional[Path] = None,
     ) -> None:
         super().__init__("tlapm", logger, console)
         self.binary_path = binary_path
         self.community_modules_dir = community_modules_dir
-        self.data_path = data_path
 
     def is_available(self) -> bool:
         return self.binary_path.exists()
@@ -480,6 +479,9 @@ class TLAPM(Tool):
         timeout: Optional[timedelta] = None,
         interactive: bool = True,
         silent: bool = False,
+        cache_dir: Optional[Path] = None,
+        nofp: bool = False,
+        cleanfp: bool = False,
     ) -> TLAPMRun:
         """Run tlapm on *module_path* and return the results.
 
@@ -499,14 +501,23 @@ class TLAPM(Tool):
         """
         run = TLAPMRun(started_at=datetime.now())
 
+        if cache_dir is not None:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
         cmd = [str(self.binary_path), "--toolbox", "0", "0"]
         if stretch is not None:
             cmd.extend(["--stretch", str(stretch)])
+        if nofp:
+            cmd.append("--nofp")
+        if cleanfp:
+            cmd.append("--cleanfp")
         if community_modules and self.community_modules_dir.exists():
             cmd.extend(["-I", str(self.community_modules_dir)])
         for d in include_dirs or []:
             cmd.extend(["-I", str(d)])
         cmd.append(str(module_path))
+
+        env = {**os.environ, "TLAPM_CACHE_DIR": str(cache_dir)} if cache_dir is not None else None
 
         output_lines: list[str] = []
         parser = TLAPMOutputParser()
@@ -519,6 +530,7 @@ class TLAPM(Tool):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            env=env,
         )
         if process.stdout is None:
             raise RuntimeError("Failed to launch tlapm: no stdout pipe.")
@@ -557,13 +569,8 @@ class TLAPM(Tool):
         failed = sum(1 for o in run.obligations.values() if o.status == FAILED)
         run.success = (process.returncode == 0) and (failed == 0)
 
-        if self.data_path is not None:
-            run_dir = (
-                self.data_path
-                / f"tlapm-run-{run.started_at.strftime('%Y-%m-%d-%H-%M-%S')}"
-            )
-            run_dir.mkdir(parents=True, exist_ok=True)
-            run.log_file = run_dir / "tlapm.log"
+        if cache_dir is not None:
+            run.log_file = cache_dir / "tlapm.log"
             run.log_file.write_text("".join(output_lines))
 
         display.show_summary(run)

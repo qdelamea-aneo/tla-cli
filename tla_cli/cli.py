@@ -36,8 +36,7 @@ class AppContext:
     sany: SANY
     tlapm: TLAPM
     repl: REPL
-    workdir: Path
-    run_data_dir: Path
+    cache_dir: Path
 
 
 def _show_vibecode_warning() -> None:
@@ -69,14 +68,9 @@ def cli(ctx: click.Context) -> None:
     _show_vibecode_warning()
     CONSOLE.print(_BANNER, style="bold blue", highlight=False)
 
-    workdir = Path.cwd() / ".tla"
-    workdir.mkdir(exist_ok=True)
-    run_data_dir = workdir / "data"
-
     ctx.obj = AppContext(
         tlc=TLC(
             main_class="tlc2.TLC",
-            data_path=run_data_dir,
             tla2tools_jar=_TLA2TOOLS_JAR,
             community_modules_jar=_COMMUNITY_MODULES_JAR,
             logger=LOGGER,
@@ -87,14 +81,12 @@ def cli(ctx: click.Context) -> None:
             community_modules_jar=_COMMUNITY_MODULES_JAR,
             logger=LOGGER,
             console=CONSOLE,
-            data_path=run_data_dir,
         ),
         tlapm=TLAPM(
             binary_path=_TLAPM_BINARY,
             community_modules_dir=_TOOLS_DIR / "CommunityModules-deps",
             logger=LOGGER,
             console=CONSOLE,
-            data_path=run_data_dir,
         ),
         repl=REPL(
             main_class="tlc2.REPL",
@@ -102,8 +94,7 @@ def cli(ctx: click.Context) -> None:
             logger=LOGGER,
             console=CONSOLE,
         ),
-        workdir=workdir,
-        run_data_dir=run_data_dir,
+        cache_dir=Path.cwd() / ".tlacache",
     )
 
     if ctx.invoked_subcommand is None:

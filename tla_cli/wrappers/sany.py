@@ -11,6 +11,7 @@ Classes:
 """
 
 import re
+import shutil
 import subprocess
 
 from dataclasses import asdict, dataclass, field
@@ -324,7 +325,6 @@ class SANY(JavaClassTool):
         community_modules_jar: Path,
         logger: Logger,
         console: Console,
-        data_path: Optional[Path] = None,
     ) -> None:
         super().__init__(
             name="SANY",
@@ -334,7 +334,6 @@ class SANY(JavaClassTool):
             console=console,
         )
         self.community_modules_jar = community_modules_jar
-        self.data_path = data_path
 
     def parse(
         self,
@@ -344,6 +343,7 @@ class SANY(JavaClassTool):
         external_modules: Optional[list[Path]] = None,
         interactive: bool = True,
         silent: bool = False,
+        cache_dir: Optional[Path] = None,
     ) -> SANYRun:
         """Run SANY on *module_path* and return the results.
 
@@ -398,13 +398,11 @@ class SANY(JavaClassTool):
         run.success = process.returncode == 0
         parser.populate_run(run)
 
-        if self.data_path is not None:
-            run_dir = (
-                self.data_path
-                / f"sany-run-{run.started_at.strftime('%Y-%m-%d-%H-%M-%S')}"
-            )
-            run_dir.mkdir(parents=True, exist_ok=True)
-            run.log_file = run_dir / "sany.log"
+        if cache_dir is not None:
+            if cache_dir.exists():
+                shutil.rmtree(cache_dir)
+            cache_dir.mkdir(parents=True)
+            run.log_file = cache_dir / "sany.log"
             run.log_file.write_text("".join(output_lines))
 
         display.show_summary(run)

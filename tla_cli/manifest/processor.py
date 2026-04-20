@@ -100,6 +100,7 @@ class Manifest(BaseModel):
         skip_passed: bool = False,
         interactive: bool = True,
         silent: bool = False,
+        cache_dir: Optional[Path] = None,
     ) -> list[ActionResult]:
         """Process all modules defined in the manifest.
 
@@ -165,8 +166,14 @@ class Manifest(BaseModel):
                             f"  [dim]▸ Model:[/dim] {model.name} [dim](skipped — passed previously)[/dim]"
                         )
                     continue
+                model_name = "default" if model.path.stem == module_stem else model.path.stem
+                model_cache = (
+                    cache_dir / module_stem / "tlc" / model_name
+                    if cache_dir is not None else None
+                )
                 result = self._run_model(
                     module, model, tlc, workers_override, max_heap_override,
+                    cache_dir=model_cache,
                     interactive=interactive, silent=silent,
                 )
                 results.append(result)
@@ -185,7 +192,15 @@ class Manifest(BaseModel):
                             f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]"
                         )
                     continue
-                result = self._run_proof(module, proof, tlapm, interactive=interactive, silent=silent)
+                proof_cache = (
+                    cache_dir / module_stem / "tlapm"
+                    if cache_dir is not None else None
+                )
+                result = self._run_proof(
+                    module, proof, tlapm,
+                    cache_dir=proof_cache,
+                    interactive=interactive, silent=silent,
+                )
                 results.append(result)
                 if skip_passed:
                     cache[cache_key] = result.overall_ok
@@ -211,6 +226,7 @@ class Manifest(BaseModel):
         tlc: TLC,
         workers_override: Optional[int] = None,
         max_heap_override: Optional[str] = None,
+        cache_dir: Optional[Path] = None,
         interactive: bool = True,
         silent: bool = False,
     ) -> ActionResult:
@@ -236,6 +252,7 @@ class Manifest(BaseModel):
                 external_modules=module.dependencies.external_modules,
                 interactive=interactive,
                 silent=silent,
+                cache_dir=cache_dir,
             )
         except Exception as exc:
             if not silent:
@@ -317,6 +334,7 @@ class Manifest(BaseModel):
         module: Module,
         proof: Proof,
         tlapm: TLAPM,
+        cache_dir: Optional[Path] = None,
         interactive: bool = True,
         silent: bool = False,
     ) -> ActionResult:
@@ -350,6 +368,7 @@ class Manifest(BaseModel):
                 timeout=proof.timeout,
                 interactive=interactive,
                 silent=silent,
+                cache_dir=cache_dir,
             )
         except Exception as exc:
             if not silent:

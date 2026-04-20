@@ -79,6 +79,18 @@ if TYPE_CHECKING:
     help="LLM backend to use with --explain.",
 )
 @click.option(
+    "--nofp",
+    is_flag=True,
+    default=False,
+    help="Do not use the fingerprint cache; re-prove all obligations.",
+)
+@click.option(
+    "--cleanfp",
+    is_flag=True,
+    default=False,
+    help="Clear the fingerprint cache before running.",
+)
+@click.option(
     "--format", "output_format",
     type=click.Choice(["text", "json"], case_sensitive=False),
     default="text",
@@ -97,6 +109,8 @@ def tla_proof_check(
     no_progress: bool,
     explain: bool,
     llm_backend: str,
+    nofp: bool,
+    cleanfp: bool,
     output_format: str,
 ) -> None:
     """
@@ -122,6 +136,7 @@ def tla_proof_check(
 
     use_json = output_format == "json"
     timeout_td = timedelta(seconds=timeout) if timeout is not None else None
+    cache_dir = app.cache_dir / module_path.stem / "tlapm"
     run = app.tlapm.prove(
         module_path,
         stretch=stretch,
@@ -130,6 +145,9 @@ def tla_proof_check(
         timeout=timeout_td,
         interactive=not (no_progress or use_json),
         silent=use_json,
+        cache_dir=cache_dir,
+        nofp=nofp,
+        cleanfp=cleanfp,
     )
 
     if use_json:

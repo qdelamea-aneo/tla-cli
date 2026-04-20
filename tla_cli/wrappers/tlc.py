@@ -6,6 +6,7 @@ that stores all data produced by a single run.
 """
 
 import json
+import shutil
 import subprocess
 import threading
 
@@ -127,7 +128,6 @@ class TLC(JavaClassTool):
     def __init__(
         self,
         main_class: str,
-        data_path: Path,
         tla2tools_jar: Path,
         community_modules_jar: Path,
         logger: Logger,
@@ -140,16 +140,7 @@ class TLC(JavaClassTool):
             logger=logger,
             console=console,
         )
-        self.base_path = data_path
         self.community_modules_jar = community_modules_jar
-
-    def create_run_dir(self) -> Path:
-        """Create and return a fresh timestamped directory for a TLC run."""
-        run_dir = (
-            self.base_path / f"tlc-run-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
-        )
-        run_dir.mkdir(parents=True, exist_ok=True)
-        return run_dir
 
     def _build_extra_classpath(
         self, community_modules: bool, external_modules: list[Path]
@@ -188,6 +179,7 @@ class TLC(JavaClassTool):
         show_log: bool = False,
         interactive: bool = True,
         silent: bool = False,
+        cache_dir: Optional[Path] = None,
     ) -> TLCRun:
         """Run TLC in exhaustive model-checking mode and return the results.
 
@@ -215,7 +207,11 @@ class TLC(JavaClassTool):
         Returns:
             A fully populated :class:`TLCRun` describing the run results.
         """
-        run_dir = self.create_run_dir()
+        if cache_dir is not None:
+            if cache_dir.exists():
+                shutil.rmtree(cache_dir)
+            cache_dir.mkdir(parents=True)
+        run_dir = cache_dir or module_path.parent
         tlc_run = TLCRun(started_at=datetime.now())
 
         tlc_args = ["-workers", str(workers), "-config", str(model_path)]
@@ -257,8 +253,8 @@ class TLC(JavaClassTool):
         else:
             self._parse_failure(tlc_run, tlc_output, process.returncode)
 
-        self._save_run_data(tlc_run, run_dir, tlc_output)
-        display.show_summary(tlc_run, run_dir)
+        self._save_run_data(tlc_run, cache_dir, tlc_output)
+        display.show_summary(tlc_run, cache_dir)
         return tlc_run
 
     def simulate(
@@ -277,6 +273,7 @@ class TLC(JavaClassTool):
         show_log: bool = False,
         interactive: bool = True,
         silent: bool = False,
+        cache_dir: Optional[Path] = None,
     ) -> TLCRun:
         """Run TLC in simulation mode and return the results.
 
@@ -301,7 +298,11 @@ class TLC(JavaClassTool):
         Returns:
             A :class:`TLCRun` describing the simulation results.
         """
-        run_dir = self.create_run_dir()
+        if cache_dir is not None:
+            if cache_dir.exists():
+                shutil.rmtree(cache_dir)
+            cache_dir.mkdir(parents=True)
+        run_dir = cache_dir or module_path.parent
         tlc_run = TLCRun(started_at=datetime.now())
 
         tlc_args = ["-simulate", "-workers", str(workers), "-config", str(model_path)]
@@ -331,8 +332,8 @@ class TLC(JavaClassTool):
         else:
             self._parse_failure(tlc_run, tlc_output, process.returncode)
 
-        self._save_run_data(tlc_run, run_dir, tlc_output)
-        display.show_summary(tlc_run, run_dir)
+        self._save_run_data(tlc_run, cache_dir, tlc_output)
+        display.show_summary(tlc_run, cache_dir)
         return tlc_run
 
     # ------------------------------------------------------------------
@@ -459,11 +460,14 @@ class TLC(JavaClassTool):
         ):
             tlc_run.error_msg = output.split("Error:")[-1].strip()
 
-    def _save_run_data(self, tlc_run: TLCRun, run_dir: Path, output: str) -> None:
+    def _save_run_data(self, tlc_run: TLCRun, run_dir: Optional[Path], output: str) -> None:
         """Persist the raw TLC log and a JSON summary of the run to *run_dir*.
 
         Creates ``tlc.log`` (verbatim output) and ``run-data.json``.
+        No-op when *run_dir* is ``None``.
         """
+        if run_dir is None:
+            return
         tlc_run.log_file = run_dir / "tlc.log"
         with tlc_run.log_file.open("w") as f:
             f.write(output)
