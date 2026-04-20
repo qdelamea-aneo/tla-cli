@@ -84,7 +84,7 @@ def cli(ctx: click.Context) -> None:
         ),
         tlapm=TLAPM(
             binary_path=_TLAPM_BINARY,
-            community_modules_dir=_TOOLS_DIR / "CommunityModules-deps",
+            community_modules_dir=_TOOLS_DIR / "community-modules",
             logger=LOGGER,
             console=CONSOLE,
         ),

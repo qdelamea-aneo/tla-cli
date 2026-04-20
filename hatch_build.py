@@ -27,6 +27,7 @@ import stat
 import tarfile
 import tempfile
 import urllib.request
+import zipfile
 from pathlib import Path
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
@@ -117,6 +118,17 @@ class CustomBuildHook(BuildHookInterface):
                 cm_jar,
             )
 
+        # Extract .tla source files so tlapm can use them (it cannot read JARs)
+        cm_tla_dir = tools_dir / "community-modules"
+        if not cm_tla_dir.exists():
+            print(f"  Extracting .tla files from CommunityModules-deps.jar…", flush=True)
+            cm_tla_dir.mkdir()
+            with zipfile.ZipFile(cm_jar) as zf:
+                tla_entries = [n for n in zf.namelist() if n.endswith(".tla")]
+                for entry in tla_entries:
+                    (cm_tla_dir / Path(entry).name).write_bytes(zf.read(entry))
+            print(f"  Extracted {len(tla_entries)} .tla file(s) to {cm_tla_dir}.")
+
     def _find_tlapm_asset(
         self, assets: list[dict], system: str, machine: str
     ) -> dict | None:
@@ -143,10 +155,12 @@ class CustomBuildHook(BuildHookInterface):
         machine = platform.machine()
         key = (system, machine)
 
-        tlapm_bin_dir = tools_dir / "tlapm" / "bin"
-        tlapm_bin = tlapm_bin_dir / "tlapm"
+        tlapm_dir = tools_dir / "tlapm"
+        tlapm_bin = tlapm_dir / "bin" / "tlapm"
+        # Isabelle is the largest backend; its presence indicates a complete install
+        tlapm_isabelle = tlapm_dir / "lib" / "tlapm" / "backends" / "Isabelle" / "bin" / "isabelle"
 
-        if not tlapm_bin.exists():
+        if not tlapm_bin.exists() or not tlapm_isabelle.exists():
             tlapm_version = _require_env("TLAPM_VERSION")
             print(f"  Fetching TLAPM {tlapm_version} release info from GitHub…", flush=True)
             release = self._github_api(
@@ -166,21 +180,37 @@ class CustomBuildHook(BuildHookInterface):
                 with tarfile.open(archive) as tar:
                     tar.extractall(tmpdir)
 
-                candidates = [
-                    p
-                    for p in Path(tmpdir).rglob("tlapm")
-                    if p.is_file() and p.stat().st_size > 0
-                ]
-                if not candidates:
+                # Tarball extracts to a "tlapm/" root directory
+                src_root = Path(tmpdir) / "tlapm"
+                if not src_root.is_dir():
+                    print(f"  WARNING: expected 'tlapm/' root not found in {asset['name']}; skipping.")
+                    return
+
+                src_bin = src_root / "bin" / "tlapm"
+                if not src_bin.is_file():
                     print(f"  WARNING: tlapm binary not found in {asset['name']}; skipping.")
                     return
 
-                candidates.sort(key=lambda p: (0 if "bin" in p.parts else 1, str(p)))
-                tlapm_bin_dir.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(candidates[0], tlapm_bin)
+                # Wipe any partial/stale installation before repopulating
+                if tlapm_dir.exists():
+                    shutil.rmtree(tlapm_dir)
+
+                # bin/tlapm  (skip tlapm_lsp and translate to keep the bundle small)
+                (tlapm_dir / "bin").mkdir(parents=True)
+                shutil.copy2(src_bin, tlapm_bin)
                 tlapm_bin.chmod(
                     tlapm_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
                 )
+
+                # lib/tlapm/ — full backend suite including Isabelle
+                src_lib = src_root / "lib" / "tlapm"
+                if src_lib.is_dir():
+                    dest_lib = tlapm_dir / "lib" / "tlapm"
+                    shutil.copytree(src_lib, dest_lib)
+                    # Ensure all executables under backends/ are marked executable
+                    for f in (dest_lib / "backends").rglob("*"):
+                        if f.is_file() and not f.suffix:
+                            f.chmod(f.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
         tag = PLATFORM_TAGS.get(key)
         if tag:
