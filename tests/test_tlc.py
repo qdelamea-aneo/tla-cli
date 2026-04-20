@@ -26,6 +26,7 @@ def make_tlc() -> TLC:
         main_class="tlc2.TLC",
         tla2tools_jar=Path("/fake/tla2tools.jar"),
         community_modules_jar=Path("/fake/community.jar"),
+        stdlib_dir=Path("/fake/stdlib"),
         logger=MagicMock(),
         console=MagicMock(),
     )

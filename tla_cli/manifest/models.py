@@ -190,14 +190,18 @@ class Dependencies(BaseModel):
         community_modules: Whether to include the CommunityModules JAR
             in the classpath (and the CommunityModules directory in the
             TLAPS search path).
+        tlaps_stdlib: Whether to add the TLAPS standard library directory
+            to tlapm's search path (-I).  Required when a proof file
+            contains ``EXTENDS TLAPS`` or any other TLAPS stdlib module.
         external_modules: Additional JAR files or directories.  Accepts
             either a single path (string) or a list of paths.
     """
 
     community_modules: bool = False
+    tlaps_stdlib: bool = False
     external_modules: list[Path] = Field(default_factory=list)
 
-    @field_validator("community_modules", mode="before")
+    @field_validator("community_modules", "tlaps_stdlib", mode="before")
     @classmethod
     def coerce_community_modules(cls, v):
         """Accept ``True``, ``"true"``, ``"tru"`` (common typo), etc."""

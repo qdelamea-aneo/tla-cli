@@ -18,6 +18,7 @@ _TOOLS_DIR = Path(__file__).parent / "tools"
 _TLA2TOOLS_JAR = _TOOLS_DIR / "tla2tools.jar"
 _COMMUNITY_MODULES_JAR = _TOOLS_DIR / "CommunityModules-deps.jar"
 _TLAPM_BINARY = _TOOLS_DIR / "tlapm" / "bin" / ("tlapm.exe" if os.name == "nt" else "tlapm")
+_TLAPM_STDLIB_DIR = _TOOLS_DIR / "tlapm" / "lib" / "tlapm" / "stdlib"
 
 _BANNER = r"""
  _____  _        _    _
@@ -71,12 +72,14 @@ def cli(ctx: click.Context) -> None:
             main_class="tlc2.TLC",
             tla2tools_jar=_TLA2TOOLS_JAR,
             community_modules_jar=_COMMUNITY_MODULES_JAR,
+            stdlib_dir=_TLAPM_STDLIB_DIR,
             logger=LOGGER,
             console=CONSOLE,
         ),
         sany=SANY(
             tla2tools_jar=_TLA2TOOLS_JAR,
             community_modules_jar=_COMMUNITY_MODULES_JAR,
+            stdlib_dir=_TLAPM_STDLIB_DIR,
             logger=LOGGER,
             console=CONSOLE,
         ),

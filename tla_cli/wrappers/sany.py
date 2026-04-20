@@ -314,6 +314,7 @@ class SANY(JavaClassTool):
         self,
         tla2tools_jar: Path,
         community_modules_jar: Path,
+        stdlib_dir: Path,
         logger: Logger,
         console: Console,
     ) -> None:
@@ -325,12 +326,14 @@ class SANY(JavaClassTool):
             console=console,
         )
         self.community_modules_jar = community_modules_jar
+        self.stdlib_dir = stdlib_dir
 
     def parse(
         self,
         module_path: Path,
         *,
         community_modules: bool = False,
+        tlaps_stdlib: bool = False,
         external_modules: Optional[list[Path]] = None,
         interactive: bool = True,
         silent: bool = False,
@@ -356,6 +359,8 @@ class SANY(JavaClassTool):
         extra_cp: list[Path] = []
         if community_modules and self.community_modules_jar.exists():
             extra_cp.append(self.community_modules_jar)
+        if tlaps_stdlib and self.stdlib_dir.exists():
+            extra_cp.append(self.stdlib_dir)
         extra_cp.extend(external_modules)
 
         # Pass just the filename; SANY is launched with cwd=module_path.parent

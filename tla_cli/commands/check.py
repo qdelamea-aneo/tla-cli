@@ -40,6 +40,12 @@ def _common_tlc_options(func):
         help="Whether to include CommunityModules in the classpath.",
     )(func)
     func = click.option(
+        "--tlaps-stdlib/--no-tlaps-stdlib",
+        default=False,
+        show_default=True,
+        help="Whether to include the TLAPS standard library directory in the classpath.",
+    )(func)
+    func = click.option(
         "--external-module",
         metavar="MODULE_PATH",
         type=click.Path(
@@ -154,6 +160,7 @@ def tla_model_check(
     workers: int,
     max_heap_size: str,
     community_modules: bool,
+    tlaps_stdlib: bool,
     external_module: list[Path],
     save_states: bool,
     export_json: bool,
@@ -189,6 +196,7 @@ def tla_model_check(
         workers=workers,
         max_heap_size=max_heap_size,
         community_modules=community_modules,
+        tlaps_stdlib=tlaps_stdlib,
         external_modules=list(external_module),
         save_states=save_states,
         export_json=export_json,
@@ -273,6 +281,7 @@ def tla_simulate(
     workers: int,
     max_heap_size: str,
     community_modules: bool,
+    tlaps_stdlib: bool,
     external_module: list[Path],
     depth: Optional[int],
     seed: Optional[int],
@@ -304,6 +313,7 @@ def tla_simulate(
         workers=workers,
         max_heap_size=max_heap_size,
         community_modules=community_modules,
+        tlaps_stdlib=tlaps_stdlib,
         external_modules=list(external_module),
         depth=depth,
         seed=seed,

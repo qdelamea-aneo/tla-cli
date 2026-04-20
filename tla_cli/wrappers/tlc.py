@@ -129,6 +129,7 @@ class TLC(JavaClassTool):
         main_class: str,
         tla2tools_jar: Path,
         community_modules_jar: Path,
+        stdlib_dir: Path,
         logger: Logger,
         console: Console,
     ) -> None:
@@ -140,12 +141,19 @@ class TLC(JavaClassTool):
             console=console,
         )
         self.community_modules_jar = community_modules_jar
+        self.stdlib_dir = stdlib_dir
 
-    def _build_extra_classpath(self, community_modules: bool, external_modules: list[Path]) -> list[Path]:
+    def _build_extra_classpath(
+        self,
+        community_modules: bool,
+        tlaps_stdlib: bool,
+        external_modules: list[Path],
+    ) -> list[Path]:
         """Assemble the per-invocation classpath additions.
 
         Args:
             community_modules: Whether to include the CommunityModules JAR.
+            tlaps_stdlib: Whether to include the TLAPS stdlib directory.
             external_modules: Additional JAR files or directories.
 
         Returns:
@@ -155,6 +163,8 @@ class TLC(JavaClassTool):
         extra: list[Path] = []
         if community_modules and self.community_modules_jar.exists():
             extra.append(self.community_modules_jar)
+        if tlaps_stdlib and self.stdlib_dir.exists():
+            extra.append(self.stdlib_dir)
         extra.extend(external_modules)
         return extra
 
@@ -166,6 +176,7 @@ class TLC(JavaClassTool):
         workers: Union[int, str] = 1,
         max_heap_size: str,
         community_modules: bool,
+        tlaps_stdlib: bool = False,
         external_modules: list[Path],
         save_states: bool = False,
         export_json: bool = False,
@@ -232,7 +243,7 @@ class TLC(JavaClassTool):
 
         tlc_args.append(str(module_path))
 
-        extra_cp = self._build_extra_classpath(community_modules, external_modules)
+        extra_cp = self._build_extra_classpath(community_modules, tlaps_stdlib, external_modules)
         cmd = self.get_java_command(
             tlc_args,
             extra_classpath=extra_cp,
@@ -268,6 +279,7 @@ class TLC(JavaClassTool):
         workers: int,
         max_heap_size: str,
         community_modules: bool,
+        tlaps_stdlib: bool = False,
         external_modules: list[Path],
         depth: Optional[int] = None,
         seed: Optional[int] = None,
@@ -317,7 +329,7 @@ class TLC(JavaClassTool):
             tlc_args.extend(["-numTraces", str(num_traces)])
         tlc_args.append(str(module_path))
 
-        extra_cp = self._build_extra_classpath(community_modules, external_modules)
+        extra_cp = self._build_extra_classpath(community_modules, tlaps_stdlib, external_modules)
         cmd = self.get_java_command(
             tlc_args,
             extra_classpath=extra_cp,

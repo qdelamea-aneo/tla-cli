@@ -437,8 +437,6 @@ class TLAPM(Tool):
         binary_path: Absolute path to the ``tlapm`` executable.
         community_modules_dir: Directory containing CommunityModules
             ``.tla`` files, added via ``-I`` when requested.
-        data_path: Base directory under which per-run log directories are
-            created.  When ``None``, no log file is saved.
     """
 
     def __init__(

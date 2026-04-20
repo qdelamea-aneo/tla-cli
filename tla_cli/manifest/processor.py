@@ -241,6 +241,7 @@ class Manifest(BaseModel):
                 workers=workers_arg,
                 max_heap_size=heap,
                 community_modules=module.dependencies.community_modules,
+                tlaps_stdlib=module.dependencies.tlaps_stdlib,
                 external_modules=module.dependencies.external_modules,
                 interactive=interactive,
                 silent=silent,

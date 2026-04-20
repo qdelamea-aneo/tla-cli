@@ -25,6 +25,12 @@ if TYPE_CHECKING:
     help="Whether to include CommunityModules in the classpath.",
 )
 @click.option(
+    "--tlaps-stdlib/--no-tlaps-stdlib",
+    default=False,
+    show_default=True,
+    help="Whether to include the TLAPS standard library directory in the classpath.",
+)
+@click.option(
     "--external-module",
     metavar="MODULE_PATH",
     type=click.Path(exists=True, dir_okay=True, file_okay=True, resolve_path=True, path_type=Path),
@@ -68,6 +74,7 @@ def tla_parse(
     app: "AppContext",
     module_path: Path,
     community_modules: bool,
+    tlaps_stdlib: bool,
     external_module: tuple[Path, ...],
     no_progress: bool,
     explain: bool,
@@ -86,6 +93,7 @@ def tla_parse(
     run = app.sany.parse(
         module_path,
         community_modules=community_modules,
+        tlaps_stdlib=tlaps_stdlib,
         external_modules=list(external_module),
         interactive=not (no_progress or use_json),
         silent=use_json,
