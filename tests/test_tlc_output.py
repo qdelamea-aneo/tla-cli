@@ -56,9 +56,16 @@ Finished in 2s at (2024-01-01 12:00:03)
 """
 
 COVERAGE_BLOCK = """\
-Coverage at 2024-01-01 12:00:03:
-  <"Init" line 10 col 3 of module Foo>: 3 states generated
-  <"Next" line 20 col 3 of module Foo>: 300 states generated
+The coverage statistics at 2024-01-01 12:00:03 (see https://explain.tlapl.us/...):
+<Init line 10, col 3 to line 12, col 4 of module Foo>: 3:3
+<Next line 20, col 3 to line 22, col 4 of module Foo>: 300:250
+End of statistics.
+"""
+
+HEADER_MODERN = """\
+TLC2 Version 2026.04.18.033656 (rev: c45c125)
+Running breadth-first search Model-Checking with fp 23 and seed -2293034290160265961 with 4 workers on 8 cores with 4096MB heap and 64MB offheap memory
+Parsing file /specs/Foo.tla
 """
 
 CONFIG_NOT_FOUND = """\
@@ -197,10 +204,35 @@ def test_version_extracted():
     assert p._tlc_rev == "abc1234"
 
 
+def test_version_extracted_legacy_format():
+    """Legacy format 'TLC2 Version X.Y of Day Month YYYY (rev: ...)' still matches."""
+    p = parse(HEADER)
+    assert p._tlc_version == "2.20"
+    assert p._tlc_rev == "abc1234"
+
+
+def test_version_extracted_modern_format():
+    """Modern format 'TLC2 Version YYYY.MM.DD.HHMMSS (rev: ...)' (no 'of ...' segment) matches."""
+    p = parse(HEADER_MODERN)
+    assert p._tlc_version == "2026.04.18.033656"
+    assert p._tlc_rev == "c45c125"
+
+
 def test_config_extracted():
     p = parse(HEADER)
     assert p._seed == 9876
     assert p._num_workers == 2
+    assert p._num_cores == 8
+    assert p._heap_size == 4096
+    assert p._offheap_size == 64
+    assert "breadth-first" in (p._mode or "")
+
+
+def test_config_extracted_negative_seed():
+    """Config line with a negative seed (common in TLC) must parse correctly."""
+    p = parse(HEADER_MODERN)
+    assert p._seed == -2293034290160265961
+    assert p._num_workers == 4
     assert p._num_cores == 8
     assert p._heap_size == 4096
     assert p._offheap_size == 64
@@ -315,6 +347,31 @@ def test_coverage_entries():
     assert next_entry.count == 300
     assert next_entry.module == "Foo"
     assert next_entry.line == 20
+
+
+def test_coverage_end_closes_block():
+    """'End of statistics.' must close the coverage block so subsequent lines are
+    not swallowed."""
+    p = parse(HEADER + SUCCESS_TAIL + COVERAGE_BLOCK)
+    # After End of statistics., the block must be closed
+    assert not p._in_coverage_block
+
+
+def test_coverage_stats_after_coverage_block():
+    """State-count lines that follow the coverage block must still be parsed
+    (regression: broken block kept the parser inside the block forever)."""
+    output = (
+        HEADER
+        + COVERAGE_BLOCK
+        + "Model checking completed. No error has been found.\n"
+        + "3157 states generated, 512 distinct states found, 0 states left on queue.\n"
+        + "The depth of the complete state graph search is 7.\n"
+        + "Finished in 2s at (2024-01-01 12:00:03)\n"
+    )
+    run = populated_run(output)
+    assert run.total_states == 3157
+    assert run.total_distinct_states == 512
+    assert run.num_states_queued == 0
 
 
 # ---------------------------------------------------------------------------

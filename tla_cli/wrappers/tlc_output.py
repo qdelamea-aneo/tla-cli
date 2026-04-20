@@ -245,9 +245,11 @@ class TLCOutputParser:
     """
 
     regex: dict[str, re.Pattern] = {
-        "version": re.compile(r"TLC2 Version (?P<tlc_version>[\d.]+) of .+? \(rev: (?P<tlc_rev>[a-f0-9]+)\)"),
+        "version": re.compile(
+            r"TLC2 Version (?P<tlc_version>[\d.]+)(?:\s+of\s+.+?)?\s*\(rev:\s*(?P<tlc_rev>[a-f0-9]+)\)"
+        ),
         "config": re.compile(
-            r"Running (?P<mode>.+?) with fp \d+ and seed (?P<seed>\d+)"
+            r"Running (?P<mode>.+?) with fp \d+ and seed (?P<seed>-?\d+)"
             r" with (?P<num_workers>\d+) workers? on (?P<num_cores>\d+) cores?"
             r" with (?P<heap_size>\d+)MB heap and (?P<offheap_size>\d+)MB offheap"
         ),
@@ -270,11 +272,13 @@ class TLCOutputParser:
             r" (?P<queue>[\d,]+) states left on queue\.$"
         ),
         "state_depth": re.compile(r"The depth of the complete state graph search is (?P<state_depth>[\d,]+)"),
-        "coverage_header": re.compile(r"^Coverage at (?P<ts>[\d\-: ]+):$"),
+        "coverage_header": re.compile(r"^The coverage statistics at"),
         "coverage_action": re.compile(
-            r'<"(?P<action>[^"]+)" line (?P<line>\d+).*? of module (?P<module>\w+)>'
-            r":\s*(?P<count>\d+) states generated"
+            r"^<(?P<action>\w+) line (?P<line>\d+)"
+            r".*? of module (?P<module>\w+)>"
+            r":\s*(?P<count>\d+)(?::(?P<distinct>\d+))?"
         ),
+        "coverage_end": re.compile(r"^End of statistics\."),
         "simulation_progress": re.compile(r"Simulation: (?P<traces>\d+) traces? generated"),
         # Error and diagnostic patterns
         "error_start": re.compile(r"^Error:\s*(?P<msg>.*)$"),
@@ -553,7 +557,10 @@ class TLCOutputParser:
             return
 
         if self._in_coverage_block:
-            m = self.regex["coverage_action"].search(stripped)
+            if self.regex["coverage_end"].match(stripped):
+                self._in_coverage_block = False
+                return
+            m = self.regex["coverage_action"].match(stripped)
             if m:
                 self._coverage.append(
                     TLCActionCoverage(
