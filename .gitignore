@@ -10,4 +10,5 @@ build/
 *.egg
 .tla/
 .tlacache/
-tla_cli/tools/tlapm/
+tla_cli/tools/*
+!tla_cli/tools/__init__.py
