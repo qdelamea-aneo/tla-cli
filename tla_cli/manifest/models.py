@@ -276,7 +276,7 @@ class ActionResult:
 
     @property
     def overall_ok(self) -> bool:
-        return self.success and self.checks_passed
+        return self.checks_passed
 
     def model_dump(self) -> dict:
         return {

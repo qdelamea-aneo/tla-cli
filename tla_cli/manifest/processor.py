@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 from typing import Optional, Union
 
+import click
 import yaml
 from pydantic import BaseModel, DirectoryPath, model_validator
 from rich.table import Table
@@ -52,10 +53,39 @@ class Manifest(BaseModel):
 
         Returns:
             A validated :class:`Manifest` instance.
+
+        Raises:
+            click.UsageError: If the file contains invalid YAML, is not a
+                mapping, or fails Pydantic validation.
         """
-        with path.open("r") as f:
-            data = yaml.safe_load(f)
-        return cls(base_path=path.parent, **data)
+        from pydantic import ValidationError
+
+        try:
+            with path.open("r") as f:
+                data = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            mark = getattr(e, "problem_mark", None)
+            location = f" (line {mark.line + 1}, column {mark.column + 1})" if mark else ""
+            problem = getattr(e, "problem", str(e))
+            raise click.UsageError(
+                f"Invalid YAML in manifest {path.name}{location}:\n  {problem}"
+            ) from None
+
+        if not isinstance(data, dict):
+            raise click.UsageError(
+                f"Manifest {path.name} must be a YAML mapping (got {type(data).__name__})"
+            )
+
+        try:
+            return cls(base_path=path.parent, **data)
+        except ValidationError as e:
+            messages = []
+            for err in e.errors():
+                loc = " → ".join(str(l) for l in err["loc"] if l != "__root__")
+                messages.append(f"  • {loc}: {err['msg']}" if loc else f"  • {err['msg']}")
+            raise click.UsageError(
+                f"Manifest {path.name} is invalid:\n" + "\n".join(messages[:10])
+            ) from None
 
     # ------------------------------------------------------------------
     # Path validation
@@ -157,6 +187,15 @@ class Manifest(BaseModel):
                 if skip_passed and cache.get(cache_key):
                     if not silent:
                         CONSOLE.print(f"  [dim]▸ Model:[/dim] {model.name} [dim](skipped — passed previously)[/dim]")
+                    results.append(ActionResult(
+                        action_type="model",
+                        name=model.name,
+                        module_name=module.path.stem,
+                        success=True,
+                        checks_passed=True,
+                        duration=None,
+                        detail="skipped",
+                    ))
                     continue
                 model_name = "default" if model.path.stem == module_stem else model.path.stem
                 model_cache = cache_dir / module_stem / "tlc" / model_name if cache_dir is not None else None
@@ -183,6 +222,15 @@ class Manifest(BaseModel):
                 if skip_passed and cache.get(cache_key):
                     if not silent:
                         CONSOLE.print(f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]")
+                    results.append(ActionResult(
+                        action_type="proof",
+                        name=proof.name,
+                        module_name=module.path.stem,
+                        success=True,
+                        checks_passed=True,
+                        duration=None,
+                        detail="skipped",
+                    ))
                     continue
                 proof_cache = cache_dir / module_stem / "tlapm" if cache_dir is not None else None
                 result = self._run_proof(
@@ -398,9 +446,14 @@ class Manifest(BaseModel):
         table.add_column("Detail")
 
         for r in results:
-            icon = "[green]✓[/green]" if r.overall_ok else "[red]✗[/red]"
-            dur = f"{r.duration.total_seconds():.1f}s" if r.duration else "—"
-            detail = "" if r.detail == "ok" else r.detail
+            if r.detail == "skipped":
+                icon = "[dim]⏭[/dim]"
+                dur = "—"
+                detail = "[dim]skipped (passed previously)[/dim]"
+            else:
+                icon = "[green]✓[/green]" if r.overall_ok else "[red]✗[/red]"
+                dur = f"{r.duration.total_seconds():.1f}s" if r.duration else "—"
+                detail = "" if r.detail == "ok" else (r.detail or "")
             table.add_row(r.module_name, r.name, r.action_type, icon, dur, detail)
 
         CONSOLE.print(table)

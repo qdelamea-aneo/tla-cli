@@ -8,11 +8,15 @@ Tests cover:
 - ModelSettings.workers "auto" support
 - Proof and Model check field validation
 - Path resolution via model_validator
+- ActionResult.overall_ok semantics (issue 08)
+- load_manifest error handling (issue 15)
+- Skipped ActionResult tracking (issue 16)
 """
 
 from datetime import timedelta
 from pathlib import Path
 
+import click
 import pytest
 from pydantic import ValidationError
 
@@ -27,7 +31,7 @@ from tla_cli.manifest import (
     ProofChecks,
     ProofSettings,
 )
-from tla_cli.manifest.models import _parse_duration
+from tla_cli.manifest.models import ActionResult, _parse_duration
 
 # ---------------------------------------------------------------------------
 # Duration parsing
@@ -361,7 +365,7 @@ modules:
 
 
 def test_load_manifest_missing_file_raises(tmp_path):
-    """A path that doesn't exist causes a ValidationError."""
+    """A path that doesn't exist causes a click.UsageError (not a raw ValidationError)."""
     manifest_text = """
 modules:
   - path: specs/DoesNotExist.tla
@@ -369,7 +373,7 @@ modules:
     manifest_file = tmp_path / "manifest.yaml"
     manifest_file.write_text(manifest_text)
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(click.UsageError):
         Manifest.load_manifest(manifest_file)
 
 
@@ -394,3 +398,107 @@ modules:
     assert m.modules[0].models == []
     assert m.modules[0].proofs == []
     assert m.modules[0].dependencies.community_modules is True
+
+
+# ---------------------------------------------------------------------------
+# Issue 08 — ActionResult.overall_ok
+# ---------------------------------------------------------------------------
+
+
+def test_overall_ok_is_checks_passed_when_success_false():
+    """overall_ok should be True when checks_passed=True even if success=False."""
+    r = ActionResult(
+        action_type="model",
+        name="test",
+        module_name="Spec",
+        success=False,
+        checks_passed=True,
+    )
+    assert r.overall_ok is True
+
+
+def test_overall_ok_is_checks_passed_when_both_true():
+    """overall_ok should be True when both success and checks_passed are True."""
+    r = ActionResult(
+        action_type="model",
+        name="test",
+        module_name="Spec",
+        success=True,
+        checks_passed=True,
+    )
+    assert r.overall_ok is True
+
+
+def test_overall_ok_false_when_checks_failed():
+    """overall_ok should be False when checks_passed=False, regardless of success."""
+    r = ActionResult(
+        action_type="model",
+        name="test",
+        module_name="Spec",
+        success=True,
+        checks_passed=False,
+    )
+    assert r.overall_ok is False
+
+
+# ---------------------------------------------------------------------------
+# Issue 15 — load_manifest error handling
+# ---------------------------------------------------------------------------
+
+
+def test_load_manifest_bad_yaml_raises_usage_error(tmp_path):
+    """Invalid YAML should raise click.UsageError, not a raw exception."""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text("invalid: yaml: [")
+
+    with pytest.raises(click.UsageError):
+        Manifest.load_manifest(manifest_file)
+
+
+def test_load_manifest_bad_yaml_no_traceback_in_message(tmp_path):
+    """The UsageError message should not contain a raw Python traceback."""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text("invalid: yaml: [")
+
+    with pytest.raises(click.UsageError) as exc_info:
+        Manifest.load_manifest(manifest_file)
+
+    assert "Traceback" not in str(exc_info.value)
+
+
+def test_load_manifest_non_dict_yaml_raises_usage_error(tmp_path):
+    """A YAML list at the top level should raise click.UsageError mentioning 'mapping'."""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text("- item1\n- item2\n")
+
+    with pytest.raises(click.UsageError, match="must be a YAML mapping"):
+        Manifest.load_manifest(manifest_file)
+
+
+def test_load_manifest_validation_error_raises_usage_error(tmp_path):
+    """A YAML with an invalid/missing path should raise click.UsageError mentioning 'is invalid'."""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text("modules:\n  - path: does_not_exist.tla\n")
+
+    with pytest.raises(click.UsageError, match="is invalid"):
+        Manifest.load_manifest(manifest_file)
+
+
+# ---------------------------------------------------------------------------
+# Issue 16 — Skipped ActionResult tracking
+# ---------------------------------------------------------------------------
+
+
+def test_skipped_result_has_detail_skipped():
+    """An ActionResult with detail='skipped' should have overall_ok=True."""
+    r = ActionResult(
+        action_type="model",
+        name="small",
+        module_name="Spec",
+        success=True,
+        checks_passed=True,
+        duration=None,
+        detail="skipped",
+    )
+    assert r.detail == "skipped"
+    assert r.overall_ok is True
