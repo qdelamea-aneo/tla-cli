@@ -158,3 +158,102 @@ def test_simulate_exits_1_when_success_is_none(runner, tla_file):
     with patch("tla_cli.wrappers.tlc.TLC.simulate", return_value=_make_run(None)):
         result = runner.invoke(cli, ["simulate", str(tla_file)])
     assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# Issue 09 — --workers accepts "auto" and rejects invalid values
+# ---------------------------------------------------------------------------
+
+
+def test_workers_auto_accepted(runner, tla_file):
+    """--workers auto must be accepted without a click error."""
+    with patch("tla_cli.wrappers.tlc.TLC.start", return_value=_make_run(True)):
+        result = runner.invoke(cli, ["model-check", str(tla_file), "--workers", "auto"])
+    assert result.exit_code == 0
+
+
+def test_workers_integer_accepted(runner, tla_file):
+    """--workers 2 must still work after replacing the type."""
+    with patch("tla_cli.wrappers.tlc.TLC.start", return_value=_make_run(True)):
+        result = runner.invoke(cli, ["model-check", str(tla_file), "--workers", "2"])
+    assert result.exit_code == 0
+
+
+def test_workers_zero_rejected(runner, tla_file):
+    """--workers 0 must fail with a message mentioning 'positive'."""
+    result = runner.invoke(cli, ["model-check", str(tla_file), "--workers", "0"])
+    assert result.exit_code != 0
+    assert "positive" in result.output.lower()
+
+
+def test_workers_invalid_string_rejected(runner, tla_file):
+    """--workers foo must fail."""
+    result = runner.invoke(cli, ["model-check", str(tla_file), "--workers", "foo"])
+    assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# Issue 14 — --no-deadlock, --continue, --difftrace are accepted
+# ---------------------------------------------------------------------------
+
+
+def test_no_deadlock_flag_accepted(runner, tla_file):
+    """--no-deadlock must be accepted and not raise an error."""
+    with patch("tla_cli.wrappers.tlc.TLC.start", return_value=_make_run(True)):
+        result = runner.invoke(cli, ["model-check", str(tla_file), "--no-deadlock"])
+    assert result.exit_code == 0
+
+
+def test_continue_flag_accepted(runner, tla_file):
+    """--continue must be accepted and not raise an error."""
+    with patch("tla_cli.wrappers.tlc.TLC.start", return_value=_make_run(True)):
+        result = runner.invoke(cli, ["model-check", str(tla_file), "--continue"])
+    assert result.exit_code == 0
+
+
+def test_difftrace_flag_accepted(runner, tla_file):
+    """--difftrace must be accepted and not raise an error."""
+    with patch("tla_cli.wrappers.tlc.TLC.start", return_value=_make_run(True)):
+        result = runner.invoke(cli, ["model-check", str(tla_file), "--difftrace"])
+    assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Issue 14 — flag propagation: new flags are forwarded to TLC.start
+# ---------------------------------------------------------------------------
+
+
+def test_no_deadlock_passed_to_tlc(runner, tla_file):
+    """TLC.start must receive no_deadlock=True when --no-deadlock is given."""
+    with patch("tla_cli.wrappers.tlc.TLC.start") as mock_start:
+        mock_start.return_value = _make_run(True)
+        runner.invoke(cli, ["model-check", str(tla_file), "--no-deadlock"])
+    _, kwargs = mock_start.call_args
+    assert kwargs.get("no_deadlock") is True
+
+
+def test_continue_passed_to_tlc(runner, tla_file):
+    """TLC.start must receive continue_after_error=True when --continue is given."""
+    with patch("tla_cli.wrappers.tlc.TLC.start") as mock_start:
+        mock_start.return_value = _make_run(True)
+        runner.invoke(cli, ["model-check", str(tla_file), "--continue"])
+    _, kwargs = mock_start.call_args
+    assert kwargs.get("continue_after_error") is True
+
+
+def test_difftrace_passed_to_tlc(runner, tla_file):
+    """TLC.start must receive difftrace=True when --difftrace is given."""
+    with patch("tla_cli.wrappers.tlc.TLC.start") as mock_start:
+        mock_start.return_value = _make_run(True)
+        runner.invoke(cli, ["model-check", str(tla_file), "--difftrace"])
+    _, kwargs = mock_start.call_args
+    assert kwargs.get("difftrace") is True
+
+
+def test_workers_auto_passed_to_tlc(runner, tla_file):
+    """TLC.start must receive workers='auto' when --workers auto is given."""
+    with patch("tla_cli.wrappers.tlc.TLC.start") as mock_start:
+        mock_start.return_value = _make_run(True)
+        runner.invoke(cli, ["model-check", str(tla_file), "--workers", "auto"])
+    _, kwargs = mock_start.call_args
+    assert kwargs.get("workers") == "auto"
