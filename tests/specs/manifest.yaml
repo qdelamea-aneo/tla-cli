@@ -1,0 +1,23 @@
+modules:
+  - path: Counter.tla
+    models:
+      - name: bounded
+        path: Counter.cfg
+        checks:
+          success: false
+          error_type: "Safety failure"
+
+  - path: TwoPhaseCommit.tla
+    models:
+      - name: small
+        path: TwoPhaseCommit.cfg
+        checks:
+          success: false
+
+  - path: InductiveProof.tla
+    proofs:
+      - name: all
+        path: InductiveProof.tla
+        checks:
+          success: true
+          num_obligations: 2

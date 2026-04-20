@@ -212,12 +212,17 @@ def tla_model_check(
     if use_json:
         json.dump(run.to_dict(), sys.stdout, indent=2, default=str)
         sys.stdout.write("\n")
+        if not run.success:
+            raise SystemExit(1)
         return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..wrappers.llm import explain_tlc_error
 
         explain_tlc_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run)
+
+    if not run.success:
+        raise SystemExit(1)
 
 
 @click.command(name="simulate")
@@ -327,9 +332,14 @@ def tla_simulate(
     if use_json:
         json.dump(run.to_dict(), sys.stdout, indent=2, default=str)
         sys.stdout.write("\n")
+        if not run.success:
+            raise SystemExit(1)
         return
 
     if explain and not run.success and run.log_file and run.log_file.exists():
         from ..wrappers.llm import explain_tlc_error
 
         explain_tlc_error(run.log_file.read_text(), CONSOLE, backend_name=llm_backend, tlc_run=run)
+
+    if not run.success:
+        raise SystemExit(1)

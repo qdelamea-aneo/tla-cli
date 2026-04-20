@@ -56,6 +56,12 @@ line-length = 140
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that launch real TLC/SANY/TLAPS processes (slow)",
+]
+
 [tool.mypy]
 exclude = ["tla_cli/tools/"]
 ignore_missing_imports = true
