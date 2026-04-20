@@ -70,6 +70,14 @@ if TYPE_CHECKING:
     help="LLM backend to use with --explain.",
 )
 @click.option(
+    "--step",
+    "step_line",
+    metavar="LINE",
+    type=int,
+    default=None,
+    help="Check only the proof step covering LINE (passed as --line to tlapm).",
+)
+@click.option(
     "--nofp",
     is_flag=True,
     default=False,
@@ -101,6 +109,7 @@ def tla_proof_check(
     no_progress: bool,
     explain: bool,
     llm_backend: str,
+    step_line: Optional[int],
     nofp: bool,
     cleanfp: bool,
     output_format: str,
@@ -137,6 +146,7 @@ def tla_proof_check(
         cache_dir=cache_dir,
         nofp=nofp,
         cleanfp=cleanfp,
+        step_line=step_line,
     )
 
     if use_json:

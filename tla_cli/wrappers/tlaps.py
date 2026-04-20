@@ -64,6 +64,25 @@ _SUCCESS_STATUSES = {PROVED, TRIVIAL}
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_loc(loc: str) -> Optional[tuple[int, int, int, int]]:
+    """Parse a tlapm location string ``"l1:c1:l2:c2"`` into a 4-tuple.
+
+    Returns ``None`` when the string is absent or malformed.
+    """
+    parts = loc.split(":")
+    if len(parts) == 4:
+        try:
+            return (int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3]))
+        except ValueError:
+            pass
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
 
@@ -89,6 +108,7 @@ class TLAPMObligation:
     meth: Optional[str] = None
     already: Optional[bool] = None
     reason: Optional[str] = None
+    obl: Optional[str] = None
 
 
 @dataclass
@@ -279,6 +299,8 @@ class TLAPMOutputParser:
                 obl.already = already
             if "reason" in fields:
                 obl.reason = fields["reason"] or None
+            if "obl" in fields:
+                obl.obl = fields["obl"] or None
         else:
             self._obligations[obl_id] = TLAPMObligation(
                 id=obl_id,
@@ -288,6 +310,7 @@ class TLAPMOutputParser:
                 meth=fields.get("meth") or None,
                 already=already,
                 reason=fields.get("reason") or None,
+                obl=fields.get("obl") or None,
             )
 
 
@@ -311,15 +334,18 @@ class TLAPMOutputDisplay:
         *,
         interactive: bool = True,
         silent: bool = False,
+        step_line: Optional[int] = None,
     ) -> None:
         self._console = console
         self._module_name = module_name
         self._interactive = interactive
         self._silent = silent
+        self._step_line = step_line
         self._progress: Optional[Progress] = None
         self._live: Optional[Live] = None
         self._task_id: Optional[TaskID] = None
         self._last_proved: int = -1  # plain-mode state
+        self._reported_failed_ids: set[int] = set()
 
     def __enter__(self) -> "TLAPMOutputDisplay":
         if not self._silent and self._interactive:
@@ -332,7 +358,8 @@ class TLAPMOutputDisplay:
                 console=self._console,
                 transient=False,
             )
-            self._task_id = self._progress.add_task(f"Proving {self._module_name}…", total=None)
+            step_suffix = f" (line {self._step_line})" if self._step_line is not None else ""
+            self._task_id = self._progress.add_task(f"Proving {self._module_name}{step_suffix}…", total=None)
             self._live = Live(
                 self._progress,
                 console=self._console,
@@ -360,10 +387,24 @@ class TLAPMOutputDisplay:
         failed = sum(1 for o in obligations.values() if o.status == FAILED)
         pending = sum(1 for o in obligations.values() if o.status not in _FINAL_STATUSES)
 
+        # Report newly-failed obligations immediately as they arrive.
+        newly_failed = sorted(
+            (o for o in obligations.values() if o.status == FAILED and o.id not in self._reported_failed_ids),
+            key=lambda o: (_parse_loc(o.loc) or (0, 0, 0, 0)),
+        )
+        for obl in newly_failed:
+            self._reported_failed_ids.add(obl.id)
+            loc_parts = _parse_loc(obl.loc)
+            loc_str = f"line {loc_parts[0]}" if loc_parts else obl.loc
+            prover_str = f" [{obl.prover}]" if obl.prover else ""
+            reason_str = f" — {obl.reason[:80]}" if obl.reason else ""
+            self._console.print(f"  [red]✗[/red] {loc_str}{prover_str}{reason_str}")
+
         if self._interactive:
             if self._progress is None or self._task_id is None:
                 return
-            parts: list[str] = [f"Proving {self._module_name}"]
+            step_suffix = f" (line {self._step_line})" if self._step_line is not None else ""
+            parts: list[str] = [f"Proving {self._module_name}{step_suffix}"]
             parts.append(f"  {proved}/{total} proved")
             if failed:
                 parts.append(f"[red]{failed} failed[/red]")
@@ -400,10 +441,24 @@ class TLAPMOutputDisplay:
             style = "green"
         else:
             lines = [f"[red]✗[/red] {failed}/{total} obligation(s) failed."]
+            failed_obls = sorted(
+                (o for o in run.obligations.values() if o.status == FAILED),
+                key=lambda o: (_parse_loc(o.loc) or (0, 0, 0, 0)),
+            )
+            for obl in failed_obls[:10]:
+                loc_parts = _parse_loc(obl.loc)
+                loc_str = f"line {loc_parts[0]}" if loc_parts else obl.loc
+                prover_str = f" [dim][{obl.prover}][/dim]" if obl.prover else ""
+                reason_str = f" — {obl.reason[:80]}" if obl.reason else ""
+                lines.append(f"  [red]•[/red] {loc_str}{prover_str}{reason_str}")
+                if obl.obl:
+                    lines.append(f"    [dim]{obl.obl[:120].strip()}[/dim]")
+            if len(failed_obls) > 10:
+                lines.append(f"  … and {len(failed_obls) - 10} more")
             for err in run.errors[:3]:
                 lines.append(f"  [red]{err[:120]}[/red]")
             if len(run.errors) > 3:
-                lines.append(f"  … and {len(run.errors) - 3} more")
+                lines.append(f"  … and {len(run.errors) - 3} more error(s)")
             body = Text.from_markup("\n".join(lines))
             style = "red"
 
@@ -466,6 +521,7 @@ class TLAPM(Tool):
         cache_dir: Optional[Path] = None,
         nofp: bool = False,
         cleanfp: bool = False,
+        step_line: Optional[int] = None,
     ) -> TLAPMRun:
         """Run tlapm on *module_path* and return the results.
 
@@ -495,6 +551,8 @@ class TLAPM(Tool):
             cmd.append("--nofp")
         if cleanfp:
             cmd.append("--cleanfp")
+        if step_line is not None:
+            cmd.extend(["--line", str(step_line)])
         if community_modules and self.community_modules_dir.exists():
             cmd.extend(["-I", str(self.community_modules_dir)])
         for d in include_dirs or []:
@@ -505,7 +563,7 @@ class TLAPM(Tool):
 
         output_lines: list[str] = []
         parser = TLAPMOutputParser()
-        display = TLAPMOutputDisplay(self.console, module_path.stem, interactive=interactive, silent=silent)
+        display = TLAPMOutputDisplay(self.console, module_path.stem, interactive=interactive, silent=silent, step_line=step_line)
 
         process = subprocess.Popen(
             cmd,

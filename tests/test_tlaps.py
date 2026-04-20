@@ -21,6 +21,7 @@ from tla_cli.wrappers.tlaps import (
     TLAPMObligation,
     TLAPMOutputParser,
     TLAPMRun,
+    _parse_loc,
 )
 
 # ---------------------------------------------------------------------------
@@ -190,6 +191,31 @@ def test_multiline_obl_field():
     p = _run_parser(lines)
     obls = p.get_obligations()
     assert 1 in obls
+    assert "ASSUME NEW CONSTANT Agent," in (obls[1].obl or "")
+    assert "PROVE  Something" in (obls[1].obl or "")
+
+
+def test_obl_field_captured_on_update():
+    """obl field must be captured when an obligation is updated."""
+    initial = _obl_block(1, TO_BE_PROVED)
+    update = [
+        "@!!BEGIN",
+        "@!!type:obligation",
+        "@!!id:1",
+        "@!!loc:10:1:10:10",
+        "@!!status:failed",
+        "@!!prover:zenon",
+        "@!!obl:PROVE FALSE",
+        "@!!END",
+    ]
+    p = _run_parser(initial + update)
+    assert p.get_obligations()[1].obl == "PROVE FALSE"
+
+
+def test_obl_field_absent_when_not_emitted():
+    lines = _obl_block(1, PROVED)
+    p = _run_parser(lines)
+    assert p.get_obligations()[1].obl is None
 
 
 def test_multiline_msg_in_warning():
@@ -343,3 +369,32 @@ def test_incomplete_block_handled_gracefully():
     p = _run_parser(lines)
     # No crash; obligation not committed since block was never closed
     assert len(p.get_obligations()) == 0
+
+
+# ---------------------------------------------------------------------------
+# _parse_loc
+# ---------------------------------------------------------------------------
+
+
+def test_parse_loc_valid():
+    assert _parse_loc("10:1:10:25") == (10, 1, 10, 25)
+
+
+def test_parse_loc_valid_multidigit():
+    assert _parse_loc("100:3:102:40") == (100, 3, 102, 40)
+
+
+def test_parse_loc_empty_string():
+    assert _parse_loc("") is None
+
+
+def test_parse_loc_too_few_parts():
+    assert _parse_loc("10:1") is None
+
+
+def test_parse_loc_non_numeric():
+    assert _parse_loc("a:b:c:d") is None
+
+
+def test_parse_loc_too_many_parts():
+    assert _parse_loc("10:1:10:25:99") is None

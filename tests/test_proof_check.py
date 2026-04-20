@@ -110,3 +110,26 @@ def test_multiple_external_modules_first_jar_rejected(runner, tla_file, jar_file
     )
     assert result.exit_code != 0
     assert "JAR" in result.output
+
+
+# ---------------------------------------------------------------------------
+# --step option
+# ---------------------------------------------------------------------------
+
+
+def test_step_option_non_integer_rejected(runner, tla_file):
+    """--step must receive an integer; a string value should be rejected by Click."""
+    result = runner.invoke(
+        cli,
+        ["proof-check", str(tla_file), "--step", "notanint"],
+    )
+    assert result.exit_code != 0
+
+
+def test_step_option_passes_jar_guard(runner, tla_file):
+    """--step with a valid integer must not trigger the JAR guard."""
+    result = runner.invoke(
+        cli,
+        ["proof-check", str(tla_file), "--step", "42"],
+    )
+    assert "JAR" not in result.output
