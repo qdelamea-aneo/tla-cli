@@ -294,3 +294,136 @@ def test_sany_diagnostic_fields():
 def test_sany_diagnostic_optional_module():
     d = SANYDiagnostic(severity="warning", message="Minor issue")
     assert d.module is None
+
+
+# ---------------------------------------------------------------------------
+# Structured parse diagnostics (ParseDiagnostic)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_exception_extracts_line_col():
+    """***Parse Error*** followed by an ``Encountered …`` line yields a
+    structured syntax diagnostic with line, column, and token."""
+    lines = [
+        "Parsing file /path/to/SyntaxError.tla",
+        "***Parse Error***",
+        'Encountered "Beginning of definition" at line 11, column 1 and token "1"',
+    ]
+    p = _run_parser(lines)
+    diags = p.get_parse_diagnostics()
+    assert len(diags) == 1
+    d = diags[0]
+    assert d.kind == "syntax"
+    assert d.module == "SyntaxError"
+    assert d.line == 11
+    assert d.col == 1
+    assert d.token == "1"
+    assert "Beginning of definition" in d.message
+
+
+def test_missing_extends_extracts_module():
+    """'Cannot find source file for module X imported in module Y.' becomes
+    a missing_module diagnostic whose module is the parent (Y)."""
+    lines = [
+        "Parsing file /path/to/MissingExtends.tla",
+        "Fatal errors while parsing TLA+ spec in file MissingExtends.tla",
+        "In module MissingExtends",
+        "Cannot find source file for module NonExistentModule imported in module MissingExtends.",
+    ]
+    p = _run_parser(lines)
+    diags = p.get_parse_diagnostics()
+    assert len(diags) == 1
+    d = diags[0]
+    assert d.kind == "missing_module"
+    assert d.module == "MissingExtends"
+    assert "NonExistentModule" in d.message
+
+
+def test_semantic_error_extracts_line_and_message():
+    """A 'line L, col C to line L2, col C2 of module M' line followed by a
+    message produces a structured semantic diagnostic."""
+    lines = [
+        "Parsing file /Spec.tla",
+        "Semantic processing of module Spec",
+        "Semantic errors:",
+        "",
+        "*** Errors: 1",
+        "",
+        "line 9, col 14 to line 9, col 26 of module Spec",
+        "",
+        "Unknown operator: `undeclaredVar'.",
+        "",
+    ]
+    p = _run_parser(lines)
+    diags = p.get_parse_diagnostics()
+    assert len(diags) == 1
+    d = diags[0]
+    assert d.kind == "semantic"
+    assert d.module == "Spec"
+    assert d.line == 9
+    assert d.col == 14
+    assert d.line_end == 9
+    assert d.col_end == 26
+    assert "Unknown operator" in d.message
+
+
+def test_missing_module_diagnostic_deduplicated():
+    """SANY prints the 'Cannot find source file' line twice (once per pass);
+    the deduped set keeps only one diagnostic."""
+    lines = [
+        "Parsing file /MissingExtends.tla",
+        "Cannot find source file for module X imported in module MissingExtends.",
+        "Cannot find source file for module X imported in module MissingExtends.",
+    ]
+    p = _run_parser(lines)
+    assert len(p.get_parse_diagnostics()) == 1
+
+
+def test_populate_run_includes_parse_diagnostics():
+    lines = [
+        "Parsing file /SyntaxError.tla",
+        "***Parse Error***",
+        'Encountered "EOF" at line 3, column 1',
+    ]
+    p = _run_parser(lines)
+    run = _make_run()
+    p.populate_run(run)
+    assert len(run.parse_diagnostics) == 1
+    assert run.parse_diagnostics[0].kind == "syntax"
+
+
+# ---------------------------------------------------------------------------
+# SANYOutputDisplay — markup rendering regression
+# ---------------------------------------------------------------------------
+
+
+def test_display_renders_markup_not_literal():
+    """Previously show_summary used Text.assemble with bracketed markup that
+    leaked through as literal '[red]' text. The panel must render the icon,
+    not print the tags verbatim."""
+    import io
+
+    from rich.console import Console
+
+    from tla_cli.wrappers.sany import SANYOutputDisplay
+
+    lines = [
+        "Parsing file /SyntaxError.tla",
+        "***Parse Error***",
+        'Encountered "EOF" at line 3, column 1',
+    ]
+    p = _run_parser(lines)
+    run = _make_run()
+    p.populate_run(run)
+    run.success = False
+
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=120, no_color=True)
+    display = SANYOutputDisplay(console, "SyntaxError", interactive=False)
+    display.show_summary(run)
+    out = buf.getvalue()
+    # Regression guard: literal markup tags must not appear in rendered output.
+    assert "[red]" not in out
+    assert "[/red]" not in out
+    # Structured diagnostic surfaces the line number the user needs.
+    assert "line 3" in out

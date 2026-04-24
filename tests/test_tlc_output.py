@@ -101,6 +101,52 @@ Error: Parsing or semantic analysis failed.
 Finished in 0s at (2024-01-01 12:00:00)
 """
 
+# TLC embeds SANY's parse-error output verbatim when a module has a syntax
+# error — see tests/specs/SyntaxError.tla run through model-check.
+SYNTAX_ERROR_IN_TLC = """\
+TLC2 Version 2.20 of Day Month 20?? (rev: abc1234)
+Running breadth-first search Model-Checking with fp 23 and seed 9876 with 1 worker on 8 cores with 4096MB heap and 64MB offheap memory
+Parsing file /specs/SyntaxError.tla
+***Parse Error***
+Encountered "Beginning of definition" at line 11, column 1 and token "1"
+
+Residual stack trace follows:
+ExtendableExpr starting at line 9, column 14.
+ExtendableExpr starting at line 9, column 9.
+
+Fatal errors while parsing TLA+ spec in file SyntaxError
+
+In module SyntaxError
+
+Could not parse module SyntaxError from file SyntaxError.tla
+*** Errors: 1
+
+In module SyntaxError
+
+Could not parse module SyntaxError from file SyntaxError.tla
+Error: Parsing or semantic analysis failed.
+Finished in 1s at (2024-01-01 12:00:00)
+"""
+
+MISSING_MODULE_IN_TLC = """\
+TLC2 Version 2.20 of Day Month 20?? (rev: abc1234)
+Running breadth-first search Model-Checking with fp 23 and seed 9876 with 1 worker on 8 cores with 4096MB heap and 64MB offheap memory
+Parsing file /specs/MissingExtends.tla
+
+Fatal errors while parsing TLA+ spec in file MissingExtends
+
+In module MissingExtends
+
+Cannot find source file for module NonExistentModule imported in module MissingExtends.
+*** Errors: 1
+
+In module MissingExtends
+
+Cannot find source file for module NonExistentModule imported in module MissingExtends.
+Error: Parsing or semantic analysis failed.
+Finished in 1s at (2024-01-01 12:00:00)
+"""
+
 DEADLOCK = (
     "TLC2 Version 2.20 of Day Month 20?? (rev: abc1234)\n"
     "Running breadth-first search Model-Checking with fp 23 and seed 9876"
@@ -457,18 +503,66 @@ def test_semantic_error_no_msg():
 
 
 # ---------------------------------------------------------------------------
-# Tests — error: semantic error without structured diagnostics
+# Tests — error: missing EXTENDS module (SANY "Cannot find source file …")
 # ---------------------------------------------------------------------------
 
 
-def test_semantic_error_no_diags_kind():
+def test_missing_module_kind():
     run = populated_run(SEMANTIC_ERROR_NO_DIAGS)
     assert run.error_kind == "semantic_error"
 
 
-def test_semantic_error_no_diags_empty_list():
+def test_missing_module_diagnostic_extracted():
+    """SANY's 'Cannot find source file for module X imported in module Y.'
+    line is extracted as a structured diagnostic so `tla mc` can show the
+    name rather than a generic 'see the log file' hint."""
     run = populated_run(SEMANTIC_ERROR_NO_DIAGS)
-    assert not run.diagnostics
+    assert run.diagnostics is not None
+    assert len(run.diagnostics) == 1
+    diag = run.diagnostics[0]
+    assert diag.module == "Foo"
+    assert "Missing" in diag.message
+    # Missing-module diagnostics carry no line/col — sentinel 0 is rendered as "—".
+    assert diag.line_start == 0
+    assert diag.col_start == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests — error: SANY syntax error surfaced through TLC
+# ---------------------------------------------------------------------------
+
+
+def test_syntax_error_in_tlc_kind():
+    """TLC output for a module with a syntax error is classified as
+    semantic_error so the diagnostics table is rendered."""
+    run = populated_run(SYNTAX_ERROR_IN_TLC)
+    assert run.error_kind == "semantic_error"
+
+
+def test_syntax_error_in_tlc_has_line_col():
+    """The ***Parse Error*** + Encountered lines in TLC output are parsed into
+    a TLCDiagnostic with the real line and column from SANY."""
+    run = populated_run(SYNTAX_ERROR_IN_TLC)
+    assert run.diagnostics is not None
+    assert len(run.diagnostics) == 1
+    d = run.diagnostics[0]
+    assert d.module == "SyntaxError"
+    assert d.line_start == 11
+    assert d.col_start == 1
+    assert "Beginning of definition" in d.message
+
+
+def test_missing_module_in_tlc_names_module():
+    """'Cannot find source file for module X imported in module Y.' embedded
+    in TLC output yields a single diagnostic referencing the missing name."""
+    run = populated_run(MISSING_MODULE_IN_TLC)
+    assert run.error_kind == "semantic_error"
+    assert run.diagnostics is not None
+    assert len(run.diagnostics) == 1
+    d = run.diagnostics[0]
+    assert d.module == "MissingExtends"
+    assert "NonExistentModule" in d.message
+    assert d.line_start == 0  # sentinel → rendered as "—"
 
 
 # ---------------------------------------------------------------------------
@@ -680,7 +774,7 @@ def test_bare_var_not_matched_outside_trace():
         "TLC2 Version 2.20 of Day Month 20?? (rev: abc1234)\n"
         "Running breadth-first search Model-Checking with fp 23 and seed 9876"
         " with 1 worker on 8 cores with 4096MB heap and 64MB offheap memory\n"
-        "counter = 42\n"          # looks like a bare var but NOT inside a trace
+        "counter = 42\n"  # looks like a bare var but NOT inside a trace
         "Model checking completed. No error has been found.\n"
         "Finished in 0s at (2024-01-01 12:00:00)\n"
     )

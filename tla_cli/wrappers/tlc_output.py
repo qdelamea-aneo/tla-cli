@@ -54,6 +54,12 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
+from .diagnostics import (
+    RE_CANNOT_FIND,
+    RE_ENCOUNTERED,
+    RE_PARSE_ERROR_HEADER,
+)
+
 if TYPE_CHECKING:
     from .tlc import TLCRun
 
@@ -245,9 +251,7 @@ class TLCOutputParser:
     """
 
     regex: dict[str, re.Pattern] = {
-        "version": re.compile(
-            r"TLC2 Version (?P<tlc_version>[\d.]+)(?:\s+of\s+.+?)?\s*\(rev:\s*(?P<tlc_rev>[a-f0-9]+)\)"
-        ),
+        "version": re.compile(r"TLC2 Version (?P<tlc_version>[\d.]+)(?:\s+of\s+.+?)?\s*\(rev:\s*(?P<tlc_rev>[a-f0-9]+)\)"),
         "config": re.compile(
             r"Running (?P<mode>.+?) with fp \d+ and seed (?P<seed>-?\d+)"
             r" with (?P<num_workers>\d+) workers? on (?P<num_cores>\d+) cores?"
@@ -326,6 +330,12 @@ class TLCOutputParser:
         self._seen_diagnostics: set[tuple] = set()  # dedup key set
         self._pending_loc: Optional[tuple[str, int, int, int, int]] = None
         self._pending_msg_lines: list[str] = []
+        # SANY parse-exception tracking. TLC runs SANY under the hood and
+        # emits its output verbatim; we mirror the same extraction as
+        # :class:`~tla_cli.wrappers.sany.SANYOutputParser` for the two
+        # formats TLC surfaces: ``***Parse Error***`` followed by
+        # ``Encountered …`` and ``Cannot find source file for module X``.
+        self._awaiting_encountered: bool = False
 
         # Generic error block tracking
         self._error_lines: list[str] = []
@@ -380,6 +390,66 @@ class TLCOutputParser:
         if m:
             self._modules_parsed.append(m.group("filepath"))
             self._phase = TLCPhase.PARSING
+            return
+
+        # SANY "***Parse Error***" header — followed by an "Encountered … at
+        # line N, column M" line that carries the location and token. The
+        # existing "Error: Parsing or semantic analysis failed." handler
+        # below still classifies error_kind when the final line arrives.
+        if RE_PARSE_ERROR_HEADER.match(stripped):
+            self._awaiting_encountered = True
+            self._error_kind = self._error_kind or "semantic_error"
+            return
+
+        if self._awaiting_encountered:
+            em = RE_ENCOUNTERED.search(stripped)
+            if em:
+                ln = int(em.group("line"))
+                col = int(em.group("col"))
+                expect = em.group("expect")
+                tok = em.group("tok")
+                mod = Path(self._modules_parsed[-1]).stem if self._modules_parsed else "<unknown>"
+                msg_core = f'Syntax error: encountered "{expect}"'
+                message = f'{msg_core} (token "{tok}")' if tok else msg_core
+                key = (mod, ln, col, message)
+                if key not in self._seen_diagnostics:
+                    self._seen_diagnostics.add(key)
+                    self._diagnostics.append(
+                        TLCDiagnostic(
+                            module=mod,
+                            line_start=ln,
+                            col_start=col,
+                            line_end=ln,
+                            col_end=col,
+                            message=message,
+                        )
+                    )
+                self._awaiting_encountered = False
+                return
+
+        # SANY "Cannot find source file for module X imported in module Y."
+        # — emitted when an EXTENDS target is missing.  No line/column, so we
+        # use ``line_start=0`` as a sentinel rendered as "—" in the table.
+        m = RE_CANNOT_FIND.match(stripped)
+        if m:
+            self._flush_pending_diagnostic()
+            missing = m.group("missing")
+            parent = m.group("parent")
+            message = f"Cannot find source file for module {missing}"
+            key = (parent, 0, 0, message)
+            if key not in self._seen_diagnostics:
+                self._seen_diagnostics.add(key)
+                self._diagnostics.append(
+                    TLCDiagnostic(
+                        module=parent,
+                        line_start=0,
+                        col_start=0,
+                        line_end=0,
+                        col_end=0,
+                        message=message,
+                    )
+                )
+            self._error_kind = self._error_kind or "semantic_error"
             return
 
         # Diagnostic location line — process before the generic error block
@@ -1138,7 +1208,7 @@ class TLCOutputDisplay:
         table.add_column("Location", style="dim", no_wrap=True)
         table.add_column("Message")
         for d in diagnostics:
-            loc = f"line {d.line_start}, col {d.col_start}"
+            loc = "—" if d.line_start == 0 else f"line {d.line_start}, col {d.col_start}"
             table.add_row(d.module, loc, d.message)
         return table
 

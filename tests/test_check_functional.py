@@ -57,24 +57,43 @@ def test_model_check_exits_1_on_assumption_violation(runner):
     assert result.exit_code == 1, result.output
 
 
+def test_model_check_reports_parse_error_with_location(runner):
+    """Running `tla mc` on a spec with a syntax error must show the SANY
+    diagnostic (line/column + 'Encountered' message) instead of the generic
+    'See the log file' hint."""
+    result = runner.invoke(cli, ["model-check", str(SPECS / "SyntaxError.tla")])
+    assert result.exit_code == 1
+    # Line/column from SANY's "Encountered … at line 11, column 1" must be visible.
+    assert "line 11" in result.output
+    # The message surfaces the parser description without being swallowed by
+    # a generic "see the log file" hint. Rich may wrap the message across
+    # table rows, so only substrings that survive wrapping are asserted.
+    assert "Syntax error" in result.output
+    assert "Beginning of" in result.output
+
+
+def test_model_check_reports_missing_module_with_name(runner):
+    """Running `tla mc` on a spec with a missing EXTENDS target must show
+    the missing module name rather than only a log-file pointer."""
+    result = runner.invoke(cli, ["model-check", str(SPECS / "MissingExtends.tla")])
+    assert result.exit_code == 1
+    assert "NonExistentModule" in result.output
+
+
 # ---------------------------------------------------------------------------
 # model-check — JSON mode exit codes
 # ---------------------------------------------------------------------------
 
 
 def test_model_check_json_exits_0_on_passing_spec(runner):
-    result = runner.invoke(
-        cli, ["model-check", str(SPECS / "SimpleSuccess.tla"), "--format", "json"]
-    )
+    result = runner.invoke(cli, ["model-check", str(SPECS / "SimpleSuccess.tla"), "--format", "json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["success"] is True
 
 
 def test_model_check_json_exits_1_on_safety_violation(runner):
-    result = runner.invoke(
-        cli, ["model-check", str(SPECS / "Counter.tla"), "--format", "json"]
-    )
+    result = runner.invoke(cli, ["model-check", str(SPECS / "Counter.tla"), "--format", "json"])
     assert result.exit_code == 1, result.output
     data = json.loads(result.output)
     assert data["success"] is False
@@ -82,9 +101,7 @@ def test_model_check_json_exits_1_on_safety_violation(runner):
 
 def test_model_check_json_output_on_failure_is_valid_json(runner):
     """Even when the model fails, the JSON payload must be valid and complete."""
-    result = runner.invoke(
-        cli, ["model-check", str(SPECS / "Counter.tla"), "--format", "json"]
-    )
+    result = runner.invoke(cli, ["model-check", str(SPECS / "Counter.tla"), "--format", "json"])
     assert result.exit_code == 1
     data = json.loads(result.output)
     assert "success" in data
@@ -147,9 +164,12 @@ def test_simulate_exits_0_on_passing_spec(runner):
         [
             "simulate",
             str(SPECS / "SimpleSuccess.tla"),
-            "--timeout", "15",
-            "--depth", "10",
-            "--num-traces", "20",
+            "--timeout",
+            "15",
+            "--depth",
+            "10",
+            "--num-traces",
+            "20",
             "--no-progress",
         ],
     )

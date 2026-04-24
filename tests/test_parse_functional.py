@@ -59,24 +59,39 @@ def test_parse_exits_1_on_syntax_error(runner):
     assert result.exit_code == 1, result.output
 
 
+def test_parse_shows_line_number_for_syntax_error(runner):
+    """A syntax error panel must display the exact line SANY reported, not
+    just say 'parsing error detected'."""
+    result = runner.invoke(cli, ["parse", str(SPECS / "SyntaxError.tla"), "--no-progress"])
+    # The malformed expression is on line 9 but SANY reports the recovery
+    # token at line 11. Either is acceptable — the key guarantee is that
+    # some line number reaches the user.
+    assert "line 11" in result.output or "line 9" in result.output
+    # Regression: the Rich markup must be rendered, not leaked verbatim.
+    assert "[red]" not in result.output
+
+
+def test_parse_shows_missing_module_name(runner):
+    """A missing EXTENDS target must surface the name of the missing module."""
+    result = runner.invoke(cli, ["parse", str(SPECS / "MissingExtends.tla"), "--no-progress"])
+    assert result.exit_code == 1
+    assert "NonExistentModule" in result.output
+
+
 # ---------------------------------------------------------------------------
 # JSON mode exit codes
 # ---------------------------------------------------------------------------
 
 
 def test_parse_json_exits_0_on_clean_spec(runner):
-    result = runner.invoke(
-        cli, ["parse", str(SPECS / "Counter.tla"), "--format", "json"]
-    )
+    result = runner.invoke(cli, ["parse", str(SPECS / "Counter.tla"), "--format", "json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["success"] is True
 
 
 def test_parse_json_exits_1_on_semantic_error(runner):
-    result = runner.invoke(
-        cli, ["parse", str(SPECS / "SemanticError.tla"), "--format", "json"]
-    )
+    result = runner.invoke(cli, ["parse", str(SPECS / "SemanticError.tla"), "--format", "json"])
     assert result.exit_code == 1, result.output
     data = json.loads(result.output)
     assert data["success"] is False
@@ -84,9 +99,7 @@ def test_parse_json_exits_1_on_semantic_error(runner):
 
 def test_parse_json_includes_errors_on_semantic_failure(runner):
     """The JSON payload must include the error diagnostics."""
-    result = runner.invoke(
-        cli, ["parse", str(SPECS / "SemanticError.tla"), "--format", "json"]
-    )
+    result = runner.invoke(cli, ["parse", str(SPECS / "SemanticError.tla"), "--format", "json"])
     assert result.exit_code == 1
     data = json.loads(result.output)
     assert len(data["errors"]) > 0

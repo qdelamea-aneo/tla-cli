@@ -19,12 +19,22 @@ from logging import Logger
 from pathlib import Path
 from typing import Optional
 
-from rich.console import Console
+from rich.console import Console, ConsoleRenderable, Group, RichCast
 from rich.live import Live
 from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.text import Text
 
+from .diagnostics import (
+    RE_CANNOT_FIND,
+    RE_COULD_NOT_PARSE,
+    RE_ENCOUNTERED,
+    RE_PARSE_ERROR_HEADER,
+    RE_SEMANTIC_LOC,
+    DiagnosticSet,
+    ParseDiagnostic,
+    render_parse_diagnostics,
+)
 from .java import JavaClassTool
 
 # ---------------------------------------------------------------------------
@@ -71,6 +81,7 @@ class SANYRun:
     modules_semantic: list[str] = field(default_factory=list)
     errors: list[SANYDiagnostic] = field(default_factory=list)
     warnings: list[SANYDiagnostic] = field(default_factory=list)
+    parse_diagnostics: list[ParseDiagnostic] = field(default_factory=list)
     log_file: Optional[Path] = None
 
     def to_dict(self) -> dict:
@@ -105,12 +116,25 @@ class SANYOutputParser:
         self._in_error_block: bool = False
         self._has_errors: bool = False
 
+        # Structured diagnostic extraction (parallel path; legacy accumulator
+        # stays intact for JSON back-compat).
+        self._parse_diagnostics = DiagnosticSet()
+        self._current_module: Optional[str] = None
+        self._awaiting_encountered: bool = False
+        # Pending semantic-error location waiting for its message line(s).
+        self._pending_sem_loc: Optional[tuple[str, int, int, int, int]] = None
+        self._pending_sem_msg: list[str] = []
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def feed_line(self, line: str) -> None:
         """Process one output line from SANY."""
+        # Run structured extraction first; it tracks its own state and never
+        # mutates the legacy accumulator's state, so ordering is safe.
+        self._extract_structured(line)
+
         m = self._RE_PARSING.match(line)
         if m:
             self._flush_error()
@@ -165,12 +189,19 @@ class SANYOutputParser:
         self._flush_error()
         return self._has_errors or len(self._errors) > 0
 
+    def get_parse_diagnostics(self) -> list[ParseDiagnostic]:
+        """Return structured parse diagnostics collected so far."""
+        self._flush_pending_semantic()
+        return list(self._parse_diagnostics.diagnostics)
+
     def populate_run(self, run: SANYRun) -> None:
         """Write all extracted data into *run*."""
         self._flush_error()
+        self._flush_pending_semantic()
         run.modules_parsed = list(self._modules_parsed)
         run.modules_semantic = list(self._modules_semantic)
         run.errors = list(self._errors)
+        run.parse_diagnostics = list(self._parse_diagnostics.diagnostics)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -183,6 +214,127 @@ class SANYOutputParser:
                 self._errors.append(SANYDiagnostic(severity="error", message=msg))
             self._error_accumulator.clear()
         self._in_error_block = False
+
+    # ------------------------------------------------------------------
+    # Structured diagnostic extraction
+    # ------------------------------------------------------------------
+
+    def _extract_structured(self, line: str) -> None:
+        """Extract structured :class:`ParseDiagnostic` entries from *line*.
+
+        Runs independently of the legacy error accumulator so the JSON shape
+        produced by :meth:`populate_run` stays unchanged.
+        """
+        # Track current module from "Parsing file" lines.
+        m = self._RE_PARSING.match(line)
+        if m:
+            self._flush_pending_semantic()
+            self._current_module = Path(m.group(1)).stem
+            self._awaiting_encountered = False
+            return
+
+        # Syntax error: ***Parse Error*** is the header; the next ``Encountered``
+        # line carries line/column and token.
+        if RE_PARSE_ERROR_HEADER.match(line):
+            self._flush_pending_semantic()
+            self._awaiting_encountered = True
+            return
+
+        if self._awaiting_encountered:
+            em = RE_ENCOUNTERED.search(line)
+            if em:
+                ln = int(em.group("line"))
+                col = int(em.group("col"))
+                expect = em.group("expect")
+                tok = em.group("tok")
+                self._parse_diagnostics.add(
+                    ParseDiagnostic(
+                        kind="syntax",
+                        module=self._current_module,
+                        line=ln,
+                        col=col,
+                        line_end=ln,
+                        col_end=col,
+                        token=tok,
+                        message=f'Syntax error: encountered "{expect}"',
+                    )
+                )
+                self._awaiting_encountered = False
+                return
+
+        # Missing EXTENDS target: 'Cannot find source file for module X imported in module Y.'
+        m = RE_CANNOT_FIND.match(line)
+        if m:
+            self._flush_pending_semantic()
+            self._parse_diagnostics.add(
+                ParseDiagnostic(
+                    kind="missing_module",
+                    module=m.group("parent"),
+                    message=f"Cannot find source file for module {m.group('missing')}",
+                )
+            )
+            return
+
+        # Fallback: 'Could not parse module X from file Y' — only emit when no
+        # syntax/missing-module diagnostic was already captured for this module.
+        m = RE_COULD_NOT_PARSE.match(line)
+        if m:
+            mod = m.group("mod")
+            has_prior = any(d.module == mod and d.kind in ("syntax", "missing_module", "fatal") for d in self._parse_diagnostics)
+            if not has_prior:
+                self._parse_diagnostics.add(
+                    ParseDiagnostic(
+                        kind="fatal",
+                        module=mod,
+                        message="Could not parse module",
+                    )
+                )
+            return
+
+        # Semantic error location — wait for the message line(s) that follow.
+        m = RE_SEMANTIC_LOC.match(line.strip())
+        if m:
+            self._flush_pending_semantic()
+            self._pending_sem_loc = (
+                m.group("mod"),
+                int(m.group("ls")),
+                int(m.group("cs")),
+                int(m.group("le")),
+                int(m.group("ce")),
+            )
+            self._pending_sem_msg = []
+            return
+
+        # Message line for a pending semantic diagnostic.
+        if self._pending_sem_loc is not None:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("***"):
+                self._pending_sem_msg.append(stripped)
+            elif not stripped and self._pending_sem_msg:
+                self._flush_pending_semantic()
+
+    def _flush_pending_semantic(self) -> None:
+        if self._pending_sem_loc is None:
+            return
+        if not self._pending_sem_msg:
+            # No message lines accumulated yet — keep the loc around until one
+            # arrives, unless the caller is resetting state explicitly.
+            self._pending_sem_loc = None
+            return
+        mod, ls, cs, le, ce = self._pending_sem_loc
+        self._parse_diagnostics.add(
+            ParseDiagnostic(
+                kind="semantic",
+                module=mod,
+                line=ls,
+                col=cs,
+                line_end=le,
+                col_end=ce,
+                message=" ".join(self._pending_sem_msg),
+            )
+        )
+        self._pending_sem_loc = None
+        self._pending_sem_msg = []
 
 
 # ---------------------------------------------------------------------------
@@ -256,25 +408,30 @@ class SANYOutputDisplay:
         """
         if self._silent:
             return
+
+        body: ConsoleRenderable | RichCast | Text
         if run.success:
             modules = run.modules_semantic or run.modules_parsed
-            body = Text.assemble(
-                ("[green]✓[/green] ", ""),
-                (f"Parsed {len(modules)} module(s) successfully.", ""),
-            )
+            body = Text.from_markup(f"[green]✓[/green] Parsed {len(modules)} module(s) successfully.")
         else:
-            body_lines: list[Text] = []
-            body_lines.append(
-                Text.assemble(
-                    ("[red]✗[/red] ", ""),
-                    ("SANY reported errors:", "bold red"),
-                )
-            )
-            for diag in run.errors[:5]:
-                body_lines.append(Text(f"  {diag.message[:120]}", style="red"))
-            if len(run.errors) > 5:
-                body_lines.append(Text(f"  … and {len(run.errors) - 5} more", style="dim"))
-            body = Text("\n").join(body_lines)
+            parts: list[ConsoleRenderable | RichCast] = []
+            n = len(run.parse_diagnostics)
+            header = "SANY reported errors" if n != 1 else "SANY reported 1 error"
+            if n:
+                header = f"SANY reported {n} {'error' if n == 1 else 'errors'}"
+            parts.append(Text.from_markup(f"[red]✗[/red] [bold red]{header}[/bold red]"))
+
+            if run.parse_diagnostics:
+                parts.append(Text(""))
+                parts.append(render_parse_diagnostics(run.parse_diagnostics))
+            elif run.errors:
+                # Legacy fallback when no structured diagnostic could be extracted.
+                parts.append(Text(""))
+                for diag in run.errors[:5]:
+                    parts.append(Text(diag.message, style="red"))
+                if len(run.errors) > 5:
+                    parts.append(Text(f"… and {len(run.errors) - 5} more", style="dim"))
+            body = Group(*parts)
 
         style = "green" if run.success else "red"
         self._console.print(
