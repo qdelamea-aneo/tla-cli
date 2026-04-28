@@ -6,7 +6,7 @@ output strings that mirror real TLC log output are fed to
 resulting parser state is verified.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from tla_cli.wrappers.tlc import TLCRun
 from tla_cli.wrappers.tlc_output import (
@@ -842,3 +842,104 @@ def test_populate_run_no_trace_on_success():
 def test_populate_run_no_coverage_when_absent():
     run = populated_run(HEADER + SUCCESS_TAIL)
     assert run.coverage is None
+
+
+# ---------------------------------------------------------------------------
+# Live display: elapsed timer + folding progress text
+# ---------------------------------------------------------------------------
+
+
+def test_format_duration_zero():
+    from tla_cli.wrappers.tlc_output import _format_duration
+
+    assert _format_duration(timedelta(seconds=0)) == "00:00:00.000"
+
+
+def test_format_duration_seconds_and_millis():
+    from tla_cli.wrappers.tlc_output import _format_duration
+
+    assert _format_duration(timedelta(seconds=12, milliseconds=345)) == "00:00:12.345"
+
+
+def test_format_duration_minutes():
+    from tla_cli.wrappers.tlc_output import _format_duration
+
+    assert _format_duration(timedelta(minutes=2, seconds=5, milliseconds=7)) == "00:02:05.007"
+
+
+def test_format_duration_hours():
+    from tla_cli.wrappers.tlc_output import _format_duration
+
+    assert _format_duration(timedelta(hours=1, minutes=30, seconds=10, milliseconds=155)) == "01:30:10.155"
+
+
+def test_format_duration_truncates_sub_millisecond():
+    from tla_cli.wrappers.tlc_output import _format_duration
+
+    # Sub-millisecond precision is dropped (truncated, not rounded).
+    assert _format_duration(timedelta(seconds=1, microseconds=999)) == "00:00:01.000"
+    assert _format_duration(timedelta(seconds=1, microseconds=1500)) == "00:00:01.001"
+
+
+def test_format_elapsed_returns_seconds_then_minutes():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from tla_cli.wrappers.tlc_output import TLCOutputDisplay
+
+    display = TLCOutputDisplay(Console(file=StringIO()), "M", interactive=True, silent=False)
+    display._started_at = datetime.now() - timedelta(seconds=42)
+    assert display._format_elapsed() == "42s"
+
+    display._started_at = datetime.now() - timedelta(seconds=125)
+    assert display._format_elapsed() == "2m 05s"
+
+    display._started_at = datetime.now() - timedelta(hours=1, minutes=2, seconds=3)
+    assert display._format_elapsed() == "1h 02m 03s"
+
+
+def test_format_elapsed_empty_before_enter():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from tla_cli.wrappers.tlc_output import TLCOutputDisplay
+
+    display = TLCOutputDisplay(Console(file=StringIO()), "M", interactive=True, silent=False)
+    assert display._format_elapsed() == ""
+
+
+def test_live_render_includes_elapsed_and_wraps_on_narrow_terminal():
+    """The live frame must include the elapsed timer and use a folding text
+    layout so narrow terminals wrap the progress text instead of clipping."""
+    from datetime import timedelta
+    from io import StringIO
+
+    from rich.console import Console
+
+    from tla_cli.wrappers.tlc_output import TLCOutputDisplay, TLCPhase, TLCProgress
+
+    buf = StringIO()
+    console = Console(file=buf, highlight=False, markup=True, width=40, force_terminal=False)
+    display = TLCOutputDisplay(console, "VeryLongModuleName", interactive=True, silent=False)
+    display._started_at = datetime.now() - timedelta(seconds=12)
+
+    progress = TLCProgress(
+        timestamp=datetime.now(),
+        depth=7,
+        total_states=1234567,
+        distinct_states=987654,
+        states_per_minute=None,
+        queue_size=42,
+    )
+    console.print(display._render(TLCPhase.CHECKING, progress))
+    output = buf.getvalue()
+
+    assert "VeryLongModuleName" in output
+    assert "12s" in output
+    assert "depth 7" in output
+    assert "1,234,567 states" in output
+    # Width is 40 chars but the joined details line is much longer; folding
+    # must split it across multiple rendered lines.
+    assert output.count("\n") >= 2

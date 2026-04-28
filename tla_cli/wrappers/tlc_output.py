@@ -42,7 +42,7 @@ Error kinds produced by the parser or the exit-code mapper in :mod:`cli.tools.tl
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -62,6 +62,21 @@ from .diagnostics import (
 
 if TYPE_CHECKING:
     from .tlc import TLCRun
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _format_duration(duration: timedelta) -> str:
+    """Format *duration* as ``HH:MM:SS.mmm`` (zero-padded, with milliseconds)."""
+    total_us = duration.days * 86_400_000_000 + duration.seconds * 1_000_000 + duration.microseconds
+    millis, _ = divmod(total_us, 1000)
+    total_s, millis = divmod(millis, 1000)
+    hours, rem = divmod(total_s, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
 
 
 # ---------------------------------------------------------------------------
@@ -962,6 +977,8 @@ class TLCOutputDisplay:
         self._interactive = interactive
         self._silent = silent
         self._live: Optional[Live] = None
+        self._live_renderable: Optional["_TLCLiveRenderable"] = None
+        self._started_at: Optional[datetime] = None
         # Plain-mode state tracking
         self._last_phase: Optional[TLCPhase] = None
         self._last_depth: Optional[int] = None
@@ -973,10 +990,12 @@ class TLCOutputDisplay:
     def __enter__(self) -> "TLCOutputDisplay":
         """Start the Rich Live display (no-op in silent or plain mode)."""
         if not self._silent and self._interactive:
+            self._started_at = datetime.now()
+            self._live_renderable = _TLCLiveRenderable(self)
             self._live = Live(
-                self._render(TLCPhase.INIT, None),
+                self._live_renderable,
                 console=self._console,
-                refresh_per_second=10,
+                refresh_per_second=4,
                 transient=True,
             )
             self._live.__enter__()
@@ -1008,8 +1027,9 @@ class TLCOutputDisplay:
         phase = parser.get_current_phase()
         progress = parser.get_latest_progress()
         if self._interactive:
-            if self._live is not None:
-                self._live.update(self._render(phase, progress))
+            if self._live_renderable is not None:
+                self._live_renderable.phase = phase
+                self._live_renderable.progress = progress
         else:
             if phase != self._last_phase:
                 self._last_phase = phase
@@ -1184,8 +1204,7 @@ class TLCOutputDisplay:
         if tlc_run.state_depth is not None:
             stats_table.add_row("Graph depth:", str(tlc_run.state_depth))
         if tlc_run.duration is not None:
-            total_seconds = int(tlc_run.duration.total_seconds())
-            stats_table.add_row("Duration:", f"{total_seconds}s")
+            stats_table.add_row("Duration:", _format_duration(tlc_run.duration))
         if tlc_run.num_workers is not None:
             stats_table.add_row("Workers:", str(tlc_run.num_workers))
         if tlc_run.tlc_version is not None:
@@ -1262,6 +1281,10 @@ class TLCOutputDisplay:
     def _render(self, phase: TLCPhase, progress: Optional[TLCProgress]) -> Group:
         """Build the live renderable for the current parser state.
 
+        The module name appears next to the spinner glyph; phase, progress
+        counters and the elapsed timer go on a second line that folds onto
+        multiple lines when the terminal is too narrow.
+
         Args:
             phase: Current :class:`TLCPhase`.
             progress: Latest :class:`TLCProgress` snapshot, or ``None``.
@@ -1271,10 +1294,44 @@ class TLCOutputDisplay:
         """
         label = _PHASE_LABELS.get(phase, phase.value)
 
+        parts: list[str] = [label]
         if progress is not None:
-            spinner_text = f"{label} — depth {progress.depth}, {progress.total_states:,} states, {progress.distinct_states:,} distinct"
-        else:
-            spinner_text = label
+            parts.append(f"depth {progress.depth}")
+            parts.append(f"{progress.total_states:,} states")
+            parts.append(f"{progress.distinct_states:,} distinct")
+        elapsed = self._format_elapsed()
+        if elapsed:
+            parts.append(elapsed)
+        details = " · ".join(parts)
 
-        spinner = Spinner("dots", text=f"[bold]{self._module_name}[/bold] · {spinner_text}")
-        return Group(spinner)
+        spinner = Spinner("dots", text=Text.from_markup(f"[bold]{self._module_name}[/bold]"))
+        details_text = Text.from_markup(details, overflow="fold")
+        return Group(spinner, details_text)
+
+    def _format_elapsed(self) -> str:
+        """Return the elapsed wall-clock time since :meth:`__enter__` as a string."""
+        if self._started_at is None:
+            return ""
+        seconds = int((datetime.now() - self._started_at).total_seconds())
+        if seconds < 60:
+            return f"{seconds}s"
+        minutes, seconds = divmod(seconds, 60)
+        if minutes < 60:
+            return f"{minutes}m {seconds:02d}s"
+        hours, minutes = divmod(minutes, 60)
+        return f"{hours}h {minutes:02d}m {seconds:02d}s"
+
+
+class _TLCLiveRenderable:
+    """Wraps a :class:`TLCOutputDisplay` so Rich rebuilds the live frame on
+    every refresh tick — this keeps the elapsed timer ticking even when TLC
+    is producing no output.
+    """
+
+    def __init__(self, display: "TLCOutputDisplay") -> None:
+        self._display = display
+        self.phase: TLCPhase = TLCPhase.INIT
+        self.progress: Optional[TLCProgress] = None
+
+    def __rich__(self) -> Group:
+        return self._display._render(self.phase, self.progress)
