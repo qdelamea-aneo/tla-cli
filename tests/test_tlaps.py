@@ -15,9 +15,12 @@ from datetime import datetime
 from tla_cli.wrappers.tlaps import (
     BEING_PROVED,
     FAILED,
+    INTERRUPTED,
+    OMITTED,
     PROVED,
     TO_BE_PROVED,
     TRIVIAL,
+    UNKNOWN,
     TLAPMObligation,
     TLAPMOutputParser,
     TLAPMRun,
@@ -481,28 +484,127 @@ def test_obligation_text_escaped():
     assert "obligation(s) failed" in output
 
 
-def test_obligation_text_truncated_before_markup():
-    """Very long obligation text must be truncated before being wrapped in markup
-    so that the truncation cannot break an unclosed markup tag."""
+def test_obligation_text_shown_in_full():
+    """Long obligation text must be shown in full (no truncation), with each line
+    rendered separately so the panel can wrap them naturally."""
     from io import StringIO
     from rich.console import Console
     from tla_cli.wrappers.tlaps import TLAPMOutputDisplay, FAILED
 
     buf = StringIO()
-    console = Console(file=buf, highlight=False, markup=True)
+    console = Console(file=buf, highlight=False, markup=True, width=200)
     display = TLAPMOutputDisplay(console, "TestModule", interactive=False, silent=False)
 
     run = TLAPMRun(started_at=datetime.now())
     run.success = False
     run.num_obligations = 1
-    long_obl = "x" * 300  # 300 chars, well over the 200-char limit
+    multi_line_obl = "ASSUME NEW x \\in 1..10\nPROVE " + ("y" * 250)
     run.obligations = {
-        1: TLAPMObligation(id=1, loc="10:1:10:20", status=FAILED, obl=long_obl)
+        1: TLAPMObligation(id=1, loc="10:1:10:20", status=FAILED, obl=multi_line_obl)
     }
 
-    # Must not raise and must produce output
     display.show_summary(run)
     output = buf.getvalue()
     assert "obligation(s) failed" in output
-    # The truncation ellipsis must appear somewhere in the raw console output
-    assert "…" in output
+    assert "ASSUME NEW x" in output
+    # All 250 y's are preserved — Rich may visually wrap a long line across
+    # multiple panel rows, but the total character count must be intact.
+    assert output.count("y") == 250
+    # No mid-content truncation marker (the previous 200-char limit added "…").
+    assert "…" not in output
+
+
+# ---------------------------------------------------------------------------
+# Omitted / interrupted / unproved counts
+# ---------------------------------------------------------------------------
+
+
+def test_run_num_omitted_and_interrupted():
+    run = TLAPMRun(
+        started_at=datetime.now(),
+        obligations={
+            1: TLAPMObligation(id=1, loc="", status=PROVED),
+            2: TLAPMObligation(id=2, loc="", status=OMITTED),
+            3: TLAPMObligation(id=3, loc="", status=OMITTED),
+            4: TLAPMObligation(id=4, loc="", status=INTERRUPTED),
+        },
+    )
+    assert run.num_omitted == 2
+    assert run.num_interrupted == 1
+
+
+def test_run_num_unproved_counts_unknown_and_pending():
+    run = TLAPMRun(
+        started_at=datetime.now(),
+        obligations={
+            1: TLAPMObligation(id=1, loc="", status=PROVED),
+            2: TLAPMObligation(id=2, loc="", status=UNKNOWN),
+            3: TLAPMObligation(id=3, loc="", status=BEING_PROVED),
+        },
+    )
+    assert run.num_unproved == 2
+
+
+def test_run_num_unproved_includes_missing_obligations():
+    """When the INFO line reports more obligations than tlapm emitted blocks for
+    (e.g. the run was killed before they were reported), the missing ones count
+    as unproved."""
+    run = TLAPMRun(
+        started_at=datetime.now(),
+        num_obligations=5,
+        obligations={
+            1: TLAPMObligation(id=1, loc="", status=PROVED),
+            2: TLAPMObligation(id=2, loc="", status=PROVED),
+        },
+    )
+    assert run.num_unproved == 3
+
+
+def test_summary_reports_omitted_on_success():
+    from io import StringIO
+    from rich.console import Console
+    from tla_cli.wrappers.tlaps import TLAPMOutputDisplay
+
+    buf = StringIO()
+    console = Console(file=buf, highlight=False, markup=True, width=120)
+    display = TLAPMOutputDisplay(console, "TestModule", interactive=False, silent=False)
+
+    run = TLAPMRun(started_at=datetime.now())
+    run.success = True
+    run.num_obligations = 3
+    run.obligations = {
+        1: TLAPMObligation(id=1, loc="", status=PROVED),
+        2: TLAPMObligation(id=2, loc="", status=PROVED),
+        3: TLAPMObligation(id=3, loc="", status=OMITTED),
+    }
+
+    display.show_summary(run)
+    output = buf.getvalue()
+    assert "1 omitted" in output
+
+
+def test_summary_reports_unproved_on_failure():
+    from io import StringIO
+    from rich.console import Console
+    from tla_cli.wrappers.tlaps import TLAPMOutputDisplay
+
+    buf = StringIO()
+    console = Console(file=buf, highlight=False, markup=True, width=120)
+    display = TLAPMOutputDisplay(console, "TestModule", interactive=False, silent=False)
+
+    run = TLAPMRun(started_at=datetime.now())
+    run.success = False
+    run.num_obligations = 4
+    run.obligations = {
+        1: TLAPMObligation(id=1, loc="10:1:10:5", status=FAILED, reason="timeout"),
+        2: TLAPMObligation(id=2, loc="", status=OMITTED),
+        3: TLAPMObligation(id=3, loc="", status=INTERRUPTED),
+        4: TLAPMObligation(id=4, loc="", status=UNKNOWN),
+    }
+
+    display.show_summary(run)
+    output = buf.getvalue()
+    assert "1/4 obligation(s) failed" in output
+    assert "1 omitted" in output
+    assert "1 interrupted" in output
+    assert "1 unproved" in output

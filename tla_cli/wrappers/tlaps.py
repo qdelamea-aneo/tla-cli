@@ -28,8 +28,9 @@ from logging import Logger
 from pathlib import Path
 from typing import Optional
 
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -39,7 +40,6 @@ from rich.progress import (
     TextColumn,
     TimeElapsedColumn,
 )
-from rich.markup import escape
 from rich.text import Text
 
 from .base import Tool
@@ -153,6 +153,29 @@ class TLAPMRun:
     @property
     def num_pending(self) -> int:
         return sum(1 for o in self.obligations.values() if o.status not in _FINAL_STATUSES)
+
+    @property
+    def num_omitted(self) -> int:
+        return sum(1 for o in self.obligations.values() if o.status == OMITTED)
+
+    @property
+    def num_interrupted(self) -> int:
+        return sum(1 for o in self.obligations.values() if o.status == INTERRUPTED)
+
+    @property
+    def num_unproved(self) -> int:
+        """Obligations that did not reach a proved/failed/omitted/interrupted verdict.
+
+        Includes ``unknown`` results from tlapm and any obligations still pending
+        when the run terminates (e.g. after a crash or timeout).
+        """
+        accounted = _SUCCESS_STATUSES | {FAILED, OMITTED, INTERRUPTED}
+        seen = sum(1 for o in self.obligations.values() if o.status not in accounted)
+        # The INFO line may report more obligations than tlapm emitted blocks for
+        # (e.g. when the run is interrupted before all obligations are reported).
+        if self.num_obligations > len(self.obligations):
+            seen += self.num_obligations - len(self.obligations)
+        return seen
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +375,6 @@ class TLAPMOutputDisplay:
         if not self._silent and self._interactive:
             self._progress = Progress(
                 SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
                 TimeElapsedColumn(),
@@ -360,14 +382,19 @@ class TLAPMOutputDisplay:
                 transient=False,
             )
             step_suffix = f" (line {self._step_line})" if self._step_line is not None else ""
-            self._task_id = self._progress.add_task(f"Proving {self._module_name}{step_suffix}…", total=None)
+            self._task_id = self._progress.add_task("", total=None)
+            self._status_text = Text.from_markup(f"Proving {self._module_name}{step_suffix}…", overflow="fold")
             self._live = Live(
-                self._progress,
+                self._make_renderable(),
                 console=self._console,
                 refresh_per_second=10,
+                vertical_overflow="visible",
             )
             self._live.__enter__()
         return self
+
+    def _make_renderable(self):
+        return Group(self._status_text, self._progress)
 
     def __exit__(self, *args) -> None:
         if self._live:
@@ -391,7 +418,7 @@ class TLAPMOutputDisplay:
         # Report newly-failed obligations immediately as they arrive.
         newly_failed = sorted(
             (o for o in obligations.values() if o.status == FAILED and o.id not in self._reported_failed_ids),
-            key=lambda o: (_parse_loc(o.loc) or (0, 0, 0, 0)),
+            key=lambda o: _parse_loc(o.loc) or (0, 0, 0, 0),
         )
         for obl in newly_failed:
             self._reported_failed_ids.add(obl.id)
@@ -406,13 +433,16 @@ class TLAPMOutputDisplay:
                 return
             step_suffix = f" (line {self._step_line})" if self._step_line is not None else ""
             parts: list[str] = [f"Proving {self._module_name}{step_suffix}"]
-            parts.append(f"  {proved}/{total} proved")
+            parts.append(f"{proved}/{total} proved")
             if failed:
                 parts.append(f"[red]{failed} failed[/red]")
             if pending:
                 parts.append(f"{pending} in progress")
             description = " · ".join(parts)
-            self._progress.update(self._task_id, description=description, total=total, completed=proved)
+            self._status_text = Text.from_markup(description, overflow="fold")
+            self._progress.update(self._task_id, total=total, completed=proved)
+            if self._live is not None:
+                self._live.update(self._make_renderable())
         else:
             # Plain mode: print a line each time a new obligation is proved.
             if proved > self._last_proved:
@@ -439,42 +469,54 @@ class TLAPMOutputDisplay:
                 body_text = "tlapm error:\n" + "\n".join(f"  {line}" for line in error_lines[:5])
             else:
                 body_text = "tlapm exited with an error (no obligations were checked)"
-            self._console.print(Panel(
-                Text(body_text, style="red"),
-                title=f"[bold]TLAPM · {self._module_name}[/bold]",
-                border_style="red", expand=False, padding=(0, 1)
-            ))
+            self._console.print(
+                Panel(
+                    Text(body_text, style="red"),
+                    title=f"[bold]TLAPM · {self._module_name}[/bold]",
+                    border_style="red",
+                    expand=False,
+                    padding=(0, 1),
+                )
+            )
             return
+
+        omitted = run.num_omitted
+        interrupted = run.num_interrupted
+        unproved = run.num_unproved
 
         if run.success:
             lines: list[str] = [
                 f"[green]✓[/green] All {proved} obligation(s) proved.",
             ]
+            for label, count in (("omitted", omitted), ("interrupted", interrupted), ("unproved", unproved)):
+                if count:
+                    lines.append(f"  [yellow]{count} {label}[/yellow]")
             if run.warnings:
                 lines.append(f"  [yellow]{len(run.warnings)} warning(s)[/yellow]")
             body = Text.from_markup("\n".join(lines))
             style = "green"
         else:
             lines = [f"[red]✗[/red] {failed}/{total} obligation(s) failed."]
+            for label, count in (("omitted", omitted), ("interrupted", interrupted), ("unproved", unproved)):
+                if count:
+                    lines.append(f"  [yellow]{count} {label}[/yellow]")
             failed_obls = sorted(
                 (o for o in run.obligations.values() if o.status == FAILED),
-                key=lambda o: (_parse_loc(o.loc) or (0, 0, 0, 0)),
+                key=lambda o: _parse_loc(o.loc) or (0, 0, 0, 0),
             )
             for obl in failed_obls[:10]:
                 loc_parts = _parse_loc(obl.loc)
                 loc_str = f"line {loc_parts[0]}" if loc_parts else obl.loc
                 prover_str = f" [dim][{obl.prover}][/dim]" if obl.prover else ""
-                reason_str = f" — {obl.reason[:80]}" if obl.reason else ""
+                reason_str = f" — {obl.reason}" if obl.reason else ""
                 lines.append(f"  [red]•[/red] {loc_str}{prover_str}{reason_str}")
                 if obl.obl:
-                    raw_obl = obl.obl.strip()
-                    if len(raw_obl) > 200:
-                        raw_obl = raw_obl[:200] + "…"
-                    lines.append(f"    [dim]{escape(raw_obl)}[/dim]")
+                    for obl_line in obl.obl.strip().splitlines():
+                        lines.append(f"    [dim]{escape(obl_line)}[/dim]")
             if len(failed_obls) > 10:
                 lines.append(f"  … and {len(failed_obls) - 10} more")
             for err in run.errors[:3]:
-                lines.append(f"  [red]{err[:120]}[/red]")
+                lines.append(f"  [red]{escape(err)}[/red]")
             if len(run.errors) > 3:
                 lines.append(f"  … and {len(run.errors) - 3} more error(s)")
             body = Text.from_markup("\n".join(lines))
