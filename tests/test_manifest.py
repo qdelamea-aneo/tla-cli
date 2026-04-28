@@ -502,3 +502,180 @@ def test_skipped_result_has_detail_skipped():
     )
     assert r.detail == "skipped"
     assert r.overall_ok is True
+
+
+# ---------------------------------------------------------------------------
+# Model.path optional — defaults to <module>.cfg
+# ---------------------------------------------------------------------------
+
+
+def test_model_path_defaults_to_module_cfg(tmp_path):
+    """When a model omits 'path', it must default to a sibling .cfg file."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("---- MODULE Spec ----\n====\n")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("SPECIFICATION Spec\n")
+
+    manifest_text = f"""
+modules:
+  - path: {spec.name}
+    models:
+      - name: default
+        checks:
+          success: true
+"""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(manifest_text)
+
+    m = Manifest.load_manifest(manifest_file)
+    assert m.modules[0].models[0].path == cfg
+
+
+def test_model_path_default_missing_cfg_raises(tmp_path):
+    """If 'path' is omitted but the implied <module>.cfg doesn't exist, raise."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("---- MODULE Spec ----\n====\n")
+
+    manifest_text = f"""
+modules:
+  - path: {spec.name}
+    models:
+      - name: default
+        checks:
+          success: true
+"""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(manifest_text)
+
+    with pytest.raises(click.UsageError):
+        Manifest.load_manifest(manifest_file)
+
+
+def test_model_path_explicit_overrides_default(tmp_path):
+    """When 'path' is provided it is used as-is, even when a sibling .cfg exists."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("---- MODULE Spec ----\n====\n")
+    cfg = tmp_path / "Spec.cfg"
+    cfg.write_text("")
+    other_cfg = tmp_path / "Other.cfg"
+    other_cfg.write_text("")
+
+    manifest_text = f"""
+modules:
+  - path: {spec.name}
+    models:
+      - name: other
+        path: {other_cfg.name}
+        checks:
+          success: true
+"""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(manifest_text)
+
+    m = Manifest.load_manifest(manifest_file)
+    assert m.modules[0].models[0].path == other_cfg
+
+
+# ---------------------------------------------------------------------------
+# Proof.path removed — proofs always run against the module .tla file
+# ---------------------------------------------------------------------------
+
+
+def test_proof_has_no_path_field():
+    p = Proof(name="all", checks=ProofChecks(success=True))
+    assert not hasattr(p, "path") or getattr(p, "path", None) is None
+
+
+def test_proof_path_in_yaml_is_ignored(tmp_path):
+    """A legacy manifest with 'path:' under proofs must load without error
+    (the field is now silently ignored)."""
+    spec = tmp_path / "Spec.tla"
+    spec.write_text("---- MODULE Spec ----\n====\n")
+    legacy_proof_file = tmp_path / "Spec_proofs.tla"
+    legacy_proof_file.write_text("")
+
+    manifest_text = f"""
+modules:
+  - path: {spec.name}
+    proofs:
+      - name: all
+        path: {legacy_proof_file.name}
+        checks:
+          success: true
+"""
+    manifest_file = tmp_path / "manifest.yaml"
+    manifest_file.write_text(manifest_text)
+
+    m = Manifest.load_manifest(manifest_file)
+    assert m.modules[0].proofs[0].name == "all"
+
+
+# ---------------------------------------------------------------------------
+# ProofChecks: num_omitted / num_unproved
+# ---------------------------------------------------------------------------
+
+
+def test_proof_checks_with_omitted_and_unproved():
+    c = ProofChecks(success=True, num_obligations=10, num_omitted=2, num_unproved=1)
+    assert c.num_omitted == 2
+    assert c.num_unproved == 1
+
+
+def test_proof_checks_omitted_unproved_default_none():
+    c = ProofChecks(success=True)
+    assert c.num_omitted is None
+    assert c.num_unproved is None
+
+
+# ---------------------------------------------------------------------------
+# _verify_proof_checks — omitted/unproved validation
+# ---------------------------------------------------------------------------
+
+
+class _FakeTLAPMRun:
+    def __init__(self, success, num_obligations=0, num_omitted=0, num_unproved=0):
+        self.success = success
+        self.num_obligations = num_obligations
+        self.num_omitted = num_omitted
+        self.num_unproved = num_unproved
+
+
+def _bare_manifest(tmp_path):
+    spec = tmp_path / "S.tla"
+    spec.write_text("")
+    return Manifest(base_path=tmp_path, modules=[Module(path=spec)])
+
+
+def test_verify_proof_checks_num_omitted_match(tmp_path):
+    m = _bare_manifest(tmp_path)
+    run = _FakeTLAPMRun(success=True, num_obligations=10, num_omitted=2)
+    ok, _ = m._verify_proof_checks(run, ProofChecks(success=True, num_omitted=2))
+    assert ok
+
+
+def test_verify_proof_checks_num_omitted_mismatch(tmp_path):
+    m = _bare_manifest(tmp_path)
+    run = _FakeTLAPMRun(success=True, num_obligations=10, num_omitted=3)
+    ok, detail = m._verify_proof_checks(run, ProofChecks(success=True, num_omitted=2))
+    assert not ok
+    assert "num_omitted=3" in detail
+    assert "expected 2" in detail
+
+
+def test_verify_proof_checks_num_unproved_mismatch(tmp_path):
+    m = _bare_manifest(tmp_path)
+    run = _FakeTLAPMRun(success=False, num_unproved=5)
+    ok, detail = m._verify_proof_checks(run, ProofChecks(success=False, num_unproved=0))
+    assert not ok
+    assert "num_unproved=5" in detail
+
+
+def test_verify_proof_checks_reports_all_mismatches(tmp_path):
+    m = _bare_manifest(tmp_path)
+    run = _FakeTLAPMRun(success=True, num_obligations=8, num_omitted=1, num_unproved=2)
+    checks = ProofChecks(success=True, num_obligations=10, num_omitted=0, num_unproved=0)
+    ok, detail = m._verify_proof_checks(run, checks)
+    assert not ok
+    assert "num_obligations" in detail
+    assert "num_omitted" in detail
+    assert "num_unproved" in detail

@@ -67,14 +67,10 @@ class Manifest(BaseModel):
             mark = getattr(e, "problem_mark", None)
             location = f" (line {mark.line + 1}, column {mark.column + 1})" if mark else ""
             problem = getattr(e, "problem", str(e))
-            raise click.UsageError(
-                f"Invalid YAML in manifest {path.name}{location}:\n  {problem}"
-            ) from None
+            raise click.UsageError(f"Invalid YAML in manifest {path.name}{location}:\n  {problem}") from None
 
         if not isinstance(data, dict):
-            raise click.UsageError(
-                f"Manifest {path.name} must be a YAML mapping (got {type(data).__name__})"
-            )
+            raise click.UsageError(f"Manifest {path.name} must be a YAML mapping (got {type(data).__name__})")
 
         try:
             return cls(base_path=path.parent, **data)
@@ -83,9 +79,7 @@ class Manifest(BaseModel):
             for err in e.errors():
                 loc = " → ".join(str(l) for l in err["loc"] if l != "__root__")
                 messages.append(f"  • {loc}: {err['msg']}" if loc else f"  • {err['msg']}")
-            raise click.UsageError(
-                f"Manifest {path.name} is invalid:\n" + "\n".join(messages[:10])
-            ) from None
+            raise click.UsageError(f"Manifest {path.name} is invalid:\n" + "\n".join(messages[:10])) from None
 
     # ------------------------------------------------------------------
     # Path validation
@@ -101,14 +95,20 @@ class Manifest(BaseModel):
 
     @model_validator(mode="after")
     def resolve_paths(self) -> Self:
-        """Resolve all relative paths to absolute paths."""
+        """Resolve all relative paths to absolute paths.
+
+        For models that omit ``path``, default to the module's ``.tla``
+        path with the suffix replaced by ``.cfg``.  Proofs always run
+        against the parent module — they have no separate path.
+        """
         for module in self.modules:
             module.path = self._resolve(module.path)
             module.dependencies.external_modules = [self._resolve(ep) for ep in module.dependencies.external_modules]
             for model in module.models:
-                model.path = self._resolve(model.path)
-            for proof in module.proofs:
-                proof.path = self._resolve(proof.path)
+                if model.path is None:
+                    model.path = self._resolve(module.path.with_suffix(".cfg"))
+                else:
+                    model.path = self._resolve(model.path)
         return self
 
     # ------------------------------------------------------------------
@@ -187,16 +187,19 @@ class Manifest(BaseModel):
                 if skip_passed and cache.get(cache_key):
                     if not silent:
                         CONSOLE.print(f"  [dim]▸ Model:[/dim] {model.name} [dim](skipped — passed previously)[/dim]")
-                    results.append(ActionResult(
-                        action_type="model",
-                        name=model.name,
-                        module_name=module.path.stem,
-                        success=True,
-                        checks_passed=True,
-                        duration=None,
-                        detail="skipped",
-                    ))
+                    results.append(
+                        ActionResult(
+                            action_type="model",
+                            name=model.name,
+                            module_name=module.path.stem,
+                            success=True,
+                            checks_passed=True,
+                            duration=None,
+                            detail="skipped",
+                        )
+                    )
                     continue
+                assert model.path is not None  # filled in by resolve_paths
                 model_name = "default" if model.path.stem == module_stem else model.path.stem
                 model_cache = cache_dir / module_stem / "tlc" / model_name if cache_dir is not None else None
                 result = self._run_model(
@@ -222,15 +225,17 @@ class Manifest(BaseModel):
                 if skip_passed and cache.get(cache_key):
                     if not silent:
                         CONSOLE.print(f"  [dim]▸ Proof:[/dim] {proof.name} [dim](skipped — passed previously)[/dim]")
-                    results.append(ActionResult(
-                        action_type="proof",
-                        name=proof.name,
-                        module_name=module.path.stem,
-                        success=True,
-                        checks_passed=True,
-                        duration=None,
-                        detail="skipped",
-                    ))
+                    results.append(
+                        ActionResult(
+                            action_type="proof",
+                            name=proof.name,
+                            module_name=module.path.stem,
+                            success=True,
+                            checks_passed=True,
+                            duration=None,
+                            detail="skipped",
+                        )
+                    )
                     continue
                 proof_cache = cache_dir / module_stem / "tlapm" if cache_dir is not None else None
                 result = self._run_proof(
@@ -281,6 +286,7 @@ class Manifest(BaseModel):
             workers_arg = int(model.settings.workers)
 
         heap = max_heap_override or model.settings.max_heap_size
+        assert model.path is not None  # filled in by resolve_paths
 
         try:
             tlc_run = tlc.start(
@@ -377,7 +383,7 @@ class Manifest(BaseModel):
         try:
             include_dirs = [p if p.is_dir() else p.parent for p in module.dependencies.external_modules]
             tlapm_run = tlapm.prove(
-                proof.path,
+                module.path,
                 stretch=proof.settings.stretch,
                 community_modules=module.dependencies.community_modules,
                 include_dirs=include_dirs,
@@ -417,10 +423,15 @@ class Manifest(BaseModel):
         if tlapm_run.success != checks.success:
             return False, f"success={tlapm_run.success} (expected {checks.success})"
 
-        if checks.num_obligations is not None:
-            actual = tlapm_run.num_obligations
-            if actual != checks.num_obligations:
-                return False, (f"num_obligations={actual} (expected {checks.num_obligations})")
+        mismatches: list[str] = []
+        if checks.num_obligations is not None and tlapm_run.num_obligations != checks.num_obligations:
+            mismatches.append(f"num_obligations={tlapm_run.num_obligations} (expected {checks.num_obligations})")
+        if checks.num_omitted is not None and tlapm_run.num_omitted != checks.num_omitted:
+            mismatches.append(f"num_omitted={tlapm_run.num_omitted} (expected {checks.num_omitted})")
+        if checks.num_unproved is not None and tlapm_run.num_unproved != checks.num_unproved:
+            mismatches.append(f"num_unproved={tlapm_run.num_unproved} (expected {checks.num_unproved})")
+        if mismatches:
+            return False, "; ".join(mismatches)
 
         return True, "ok"
 

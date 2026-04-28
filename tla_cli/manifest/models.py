@@ -12,7 +12,7 @@ Manifest YAML format::
           external_modules: path/to/extra.jar   # string or list
         models:
           - name: small
-            path: specs/MySpec.cfg
+            path: specs/MySpec.cfg   # optional — defaults to <module>.cfg
             timeout: "0:05:00"
             mode: exhaustive
             settings:
@@ -25,13 +25,14 @@ Manifest YAML format::
               state_depth: 8
         proofs:
           - name: all
-            path: specs/MySpec_proofs.tla
             timeout: "0:10:00"
             settings:
               stretch: 2
             checks:
               success: true
               num_obligations: 42
+              num_omitted: 0
+              num_unproved: 0
 """
 
 import re
@@ -106,7 +107,10 @@ class Model(BaseModel):
 
     Attributes:
         name: Short identifier for the model (e.g. ``"small"``).
-        path: Path to the ``.cfg`` model configuration file.
+        path: Path to the ``.cfg`` model configuration file.  Optional —
+            when omitted, the manifest resolver fills this in with the
+            module's ``.tla`` path rewritten to ``.cfg`` (i.e. a sibling
+            file with the same stem).
         timeout: Maximum allowed wall-clock duration for the run.
         type: Model type; currently only ``"explicit"`` (TLC) is supported.
         mode: Checking mode: ``"exhaustive"`` (BFS) or ``"simulation"``.
@@ -115,7 +119,7 @@ class Model(BaseModel):
     """
 
     name: str
-    path: Path
+    path: Optional[Path] = None
     timeout: Optional[timedelta] = None
     type: Literal["explicit", "symbolic"] = "explicit"
     mode: Literal["exhaustive", "simulation"] = "exhaustive"
@@ -149,25 +153,34 @@ class ProofChecks(BaseModel):
     Attributes:
         success: Whether all obligations should be proved.
         num_obligations: Expected total number of proof obligations.
+        num_omitted: Expected number of obligations skipped via OMITTED in
+            the proof source.
+        num_unproved: Expected number of obligations that did not reach a
+            proved/failed/omitted/interrupted verdict (e.g. ``unknown``
+            results, or obligations the run never reached).
     """
 
     success: bool
     num_obligations: Optional[int] = None
+    num_omitted: Optional[int] = None
+    num_unproved: Optional[int] = None
 
 
 class Proof(BaseModel):
     """A TLAPS proof-checking configuration.
 
+    The proof always runs against the parent module's ``.tla`` file —
+    there is no per-proof path.  Use a separate :class:`Module` entry if
+    you want to run TLAPS against a different file.
+
     Attributes:
         name: Short identifier for the proof (e.g. ``"all"``).
-        path: Path to the TLA+ proof file.
         timeout: Maximum allowed wall-clock duration for the run.
         settings: Prover runtime settings.
         checks: Expected results to validate after the run.
     """
 
     name: str
-    path: Path
     timeout: Optional[timedelta] = None
     settings: ProofSettings = Field(default_factory=ProofSettings)
     checks: ProofChecks
