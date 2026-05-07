@@ -419,11 +419,14 @@ class Manifest(BaseModel):
         )
 
     def _verify_proof_checks(self, tlapm_run, checks: ProofChecks) -> tuple[bool, str]:
-        """Compare tlapm run results against expected checks."""
-        if tlapm_run.success != checks.success:
-            return False, f"success={tlapm_run.success} (expected {checks.success})"
+        """Compare tlapm run results against expected checks.
 
+        Collects every mismatch (including the ``success`` flag) so users see
+        all count discrepancies, not just the first one.
+        """
         mismatches: list[str] = []
+        if tlapm_run.success != checks.success:
+            mismatches.append(f"success={tlapm_run.success} (expected {checks.success})")
         if checks.num_obligations is not None and tlapm_run.num_obligations != checks.num_obligations:
             mismatches.append(f"num_obligations={tlapm_run.num_obligations} (expected {checks.num_obligations})")
         if checks.num_omitted is not None and tlapm_run.num_omitted != checks.num_omitted:

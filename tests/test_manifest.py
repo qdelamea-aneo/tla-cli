@@ -679,3 +679,81 @@ def test_verify_proof_checks_reports_all_mismatches(tmp_path):
     assert "num_obligations" in detail
     assert "num_omitted" in detail
     assert "num_unproved" in detail
+
+
+# ---------------------------------------------------------------------------
+# _verify_proof_checks — real TLAPMRun (not the fake) so property accessors run
+# ---------------------------------------------------------------------------
+
+
+def _real_tlapm_run(*statuses, num_obligations=None):
+    """Build a real TLAPMRun populated with obligations carrying *statuses*."""
+    from datetime import datetime
+
+    from tla_cli.wrappers.tlaps import TLAPMObligation, TLAPMRun
+
+    obligations = {i + 1: TLAPMObligation(id=i + 1, loc="", status=s) for i, s in enumerate(statuses)}
+    run = TLAPMRun(started_at=datetime.now(), obligations=obligations)
+    run.num_obligations = num_obligations if num_obligations is not None else len(obligations)
+    # Mirror what the prove() loop does at end of run.
+    from tla_cli.wrappers.tlaps import FAILED
+
+    failed = sum(1 for o in obligations.values() if o.status == FAILED)
+    run.success = failed == 0
+    return run
+
+
+def test_verify_proof_checks_real_run_omitted_mismatch(tmp_path):
+    """End-to-end-ish: a real TLAPMRun with 1 omitted obligation must fail
+    a manifest check that expects num_omitted=0."""
+    from tla_cli.wrappers.tlaps import OMITTED, PROVED
+
+    m = _bare_manifest(tmp_path)
+    run = _real_tlapm_run(PROVED, OMITTED)
+    ok, detail = m._verify_proof_checks(run, ProofChecks(success=True, num_omitted=0))
+    assert not ok, f"expected mismatch but got ok=True (detail={detail!r})"
+    assert "num_omitted=1" in detail
+
+
+def test_verify_proof_checks_real_run_unproved_mismatch(tmp_path):
+    """A real TLAPMRun with 1 unknown obligation must fail a manifest check
+    that expects num_unproved=0."""
+    from tla_cli.wrappers.tlaps import PROVED, UNKNOWN
+
+    m = _bare_manifest(tmp_path)
+    run = _real_tlapm_run(PROVED, UNKNOWN)
+    ok, detail = m._verify_proof_checks(run, ProofChecks(success=True, num_unproved=0))
+    assert not ok, f"expected mismatch but got ok=True (detail={detail!r})"
+    assert "num_unproved=1" in detail
+
+
+def test_verify_proof_checks_reports_counts_alongside_success_mismatch(tmp_path):
+    """Regression: when ``success`` disagrees AND count fields disagree, the
+    detail must include every mismatch — not just the success flag.  The
+    earlier implementation returned early on the success mismatch, hiding the
+    count discrepancies that the user wrote in the manifest."""
+    m = _bare_manifest(tmp_path)
+    run = _FakeTLAPMRun(success=False, num_obligations=4, num_omitted=1, num_unproved=1)
+    checks = ProofChecks(success=True, num_obligations=999, num_omitted=0, num_unproved=0)
+    ok, detail = m._verify_proof_checks(run, checks)
+    assert not ok
+    assert "success=False" in detail
+    assert "num_obligations=4" in detail
+    assert "num_omitted=1" in detail
+    assert "num_unproved=1" in detail
+
+
+def test_verify_proof_checks_real_run_combined_mismatches(tmp_path):
+    """Mix of statuses: PROVED + OMITTED + UNKNOWN.  Manifest claims clean
+    proof; verifier must report both num_omitted and num_unproved mismatches."""
+    from tla_cli.wrappers.tlaps import OMITTED, PROVED, UNKNOWN
+
+    m = _bare_manifest(tmp_path)
+    run = _real_tlapm_run(PROVED, OMITTED, UNKNOWN)
+    ok, detail = m._verify_proof_checks(
+        run,
+        ProofChecks(success=True, num_obligations=3, num_omitted=0, num_unproved=0),
+    )
+    assert not ok, f"expected mismatch but got ok=True (detail={detail!r})"
+    assert "num_omitted=1" in detail
+    assert "num_unproved=1" in detail
